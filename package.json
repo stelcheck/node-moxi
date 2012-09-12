@@ -1,0 +1,28 @@
+{
+    "name": "node-moxi",
+    "description": "Node.js Connector to Moxi, the Membase/Couchbase proxy",
+    "version": "0.0.1",
+    "author": "Wizcorp K.K. <info@wizcorp.jp>",
+    "homepage": "http://www.wizcorp.jp",
+    "bugs": {
+        "mail": "info@wizcorp.jp",
+        "url": "http://github.com/Wizcorp/Mithril/issues"
+    },
+    "engines": {
+        "node": ">=0.4.12"
+    },
+    "dependencies": {
+        "generic-pool": "2.0.1"
+    },
+    "devDependencies": {
+        "vows": "0.6.2"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Wizcorp/node-moxi.git"
+    },
+    "private": true,
+    "scripts": {
+        "test": "NODE_PATH=lib node_modules/.bin/vows --spec"
+    }
+}
