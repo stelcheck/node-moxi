@@ -12,7 +12,8 @@
         "node": ">=0.4.12"
     },
     "dependencies": {
-        "generic-pool": "2.0.1"
+        "async"        : "0.1.22",
+        "generic-pool" : "2.0.1"
     },
     "devDependencies": {
         "vows": "0.6.2"
@@ -23,6 +24,6 @@
     },
     "private": true,
     "scripts": {
-        "test": "NODE_PATH=lib node_modules/.bin/vows --spec"
+        "test": "NODE_PATH=./ node_modules/.bin/vows ./tests/* --spec"
     }
 }
