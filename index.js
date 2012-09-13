@@ -131,6 +131,7 @@ moxi.expects = {
         'NOT_FOUND'     : 'error',
     },
     'touch' : {
+        'STORED'       : 'verbose',
         'TOUCHED'       : 'verbose',
         'NOT_FOUND'     : 'warn'
     }
@@ -145,7 +146,7 @@ process.on('exit', function drainAllPools() {
 });
 
 moxi.prototype.get = function (key, cb) {
-    return this._call(['get', key].join(' '), false, moxi.expects.retrieve, function processDataOutput(err, data) {
+    return this._call(['get', key], false, moxi.expects.retrieve, function processDataOutput(err, data) {
 
         if (err) {
             return cb(err, data);
@@ -165,9 +166,7 @@ moxi.prototype.getMulti = function (keys, cb) {
 
     keys.unshift('get');
 
-    var call = keys.join(' ');
-
-    return this._call(call, false, moxi.expects.retrieve, function processMultiDataOutput(err, data) {
+    return this._call(keys, false, moxi.expects.retrieve, function processMultiDataOutput(err, data) {
 
         if (err || data === 'END') {
             return cb(err, {});
@@ -175,19 +174,20 @@ moxi.prototype.getMulti = function (keys, cb) {
 
         var dataArray = data.split("\r\nVALUE ");
         var res = {};
+        var meta = "";
         var key;
 
         for (var pos = 0; pos < dataArray.length; pos++) {
             var content = dataArray[pos].split('\r\n');
 
             if (pos === 0) {
-                var meta    = content.shift().substr(6).split(" ");
+                meta    = content.shift().substr(6).split(" ");
             }
             else {
-                var meta    = content.shift().split(" ");
+                meta    = content.shift().split(" ");
             }
 
-            if (pos === dataArray.length -1) {
+            if (pos === dataArray.length - 1) {
                 content.pop();
             }
 
@@ -200,49 +200,52 @@ moxi.prototype.getMulti = function (keys, cb) {
 };
 
 moxi.prototype.del = function (key, cb) {
-    return this._call(['delete', key].join(' '), false, moxi.expects.del, cb);
+    return this._call(['delete', key], false, moxi.expects.del, cb);
 };
 
 moxi.prototype.touch = function (key, time, cb) {
-    return this._call(['touch', key, time].join(' '), false, moxi.expects.touch, cb);
+    return this._call(['touch', key, time], false, moxi.expects.touch, cb);
 };
 
 moxi.prototype.incr = function (key, delta, cb) {
-    return this._call(['incr', key, delta].join(' '), false, moxi.expects.delta, cb);
+    return this._call(['incr', key, delta], false, moxi.expects.delta, cb);
 };
 
 moxi.prototype.decr = function (key, delta, cb) {
-    return this._call(['decr', key, delta].join(' '), false, moxi.expects.delta, cb);
+    return this._call(['decr', key, delta], false, moxi.expects.delta, cb);
 };
 
 moxi.prototype.set = function (key, data, timeout, cb) {
     data = data.toString();
-    return this._call(['set', key, '0', timeout, Buffer.byteLength(data)].join(' '), data, moxi.expects.store, cb);
+    return this._call(['set', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
 moxi.prototype.add = function (key, data, timeout, cb) {
     data = data.toString();
-    return this._call(['add', key, '0', timeout, Buffer.byteLength(data)].join(' '), data, moxi.expects.store, cb);
+    return this._call(['add', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
 moxi.prototype.replace = function (key, data, timeout, cb) {
     data = data.toString();
-    return this._call(['replace', key, '0', timeout, Buffer.byteLength(data)].join(' '), data, moxi.expects.store, cb);
+    return this._call(['replace', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
 moxi.prototype.append = function (key, data, timeout, cb) {
     data = data.toString();
-    return this._call(['append', key, '0', timeout, Buffer.byteLength(data)].join(' '), data, moxi.expects.store, cb);
+    return this._call(['append', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
 moxi.prototype.prepend = function (key, data, timeout, cb) {
     data = data.toString();
-    return this._call(['prepend', key, '0', timeout, Buffer.byteLength(data)].join(' '), data, moxi.expects.store, cb);
+    return this._call(['prepend', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
 moxi.prototype._call = function (action, data, expect, cb) {
 
     var that = this;
+    var command = action[0];
+
+    var actionStr = action.join(" ");
 
     this.pool.acquire(function (err, client) {
 
@@ -253,7 +256,6 @@ moxi.prototype._call = function (action, data, expect, cb) {
         client.receivedData = '';
 
         var onDataReceived = client.on('data', function onDataReceived(data) {
-            console.log(data);
 
             var lastLine;
             var receivedData;
@@ -278,6 +280,9 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 that.pool.error('ERROR: This call was invalid', action);
                 transmissionCompleted = true;
                 err = true;
+            }
+            else if (command === 'incr' || command === 'decr') {
+                transmissionCompleted = true;
             }
             else {
 
@@ -311,7 +316,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
             }
         });
 
-        client.write(action + '\r\n');
+        client.write(actionStr + '\r\n');
 
         if (data) {
             client.write(data + '\r\n');

@@ -5,32 +5,35 @@ var vows = require('vows'),
 var client = new moxi.moxi({'host' : 'localhost', port : 11211 });
 
 vows.describe('Store').addBatch({
-    'Set "test1" to "test1value"' : {
+    'Set "test6" to "test6value"' : {
         'topic': function () {
-            client.set("test1", "test1value", 3, this.callback);
+            client.set("test6", 0, 10, this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.equal(data, 'STORED');
         },
-        'read the value of "test1"' : {
+        'increment by 2 "test6"' : {
             'topic': function () {
-                client.get("test1", this.callback);
+                client.incr("test6", 2, this.callback);
             },
-            'returns "test1value"' : function (data) {
-                assert.equal(data, 'test1value');
+            'returns "2"' : function (data) {
+                assert.equal(data, '2');
             },
-            'delete "test1"' : {
+            'decrement "2"' : {
                 'topic': function () {
-                    client.del("test1", this.callback);
+                    client.decr("test6", 2, this.callback);
                 },
-                'returns "test1value"' : function (data) {
-                    assert.equal(data, 'DELETED');
+                'returns "test6value"' : function (data) {
+                    assert.equal(data, '0');
                 },
-                'read the value of "test1", expect empty' : {
+                'read the value of "test6", expect empty' : {
                     'topic' : function () {
-                        client.get("test1", this.callback);
+                        var that = this;
+                        client.del("test6", function () {
+                            client.get("test6", that.callback);
+                        });
                     },
-                    'returns "test1value" as empty' : function (data) {
+                    'returns "test6value" as empty' : function (data) {
                         assert.equal(data, '');
                     }
                 }
