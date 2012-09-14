@@ -3,7 +3,7 @@ var vows   = require('vows'),
     fs     = require('fs'),
     moxi   = require('../index.js');
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211, log: {verbose:true}  });
+var client      = new moxi.moxi({'host' : 'localhost', port : 11211  });
 var imageData   = fs.readFileSync('./data/512k.txt').toString();
 
 vows.describe('Store Large Text Data (512k data block)').addBatch({

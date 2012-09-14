@@ -80,7 +80,7 @@ var moxi = function (config, cb) {
 
                 switch (logType) {
                 case 'verbose':
-                    pool.verbose = console.debug;
+                    pool.verbose = console.log;
                     break;
                 case 'info':
                     pool.info = console.info;
@@ -134,6 +134,9 @@ moxi.expects = {
         'STORED'       : 'verbose',
         'TOUCHED'       : 'verbose',
         'NOT_FOUND'     : 'warn'
+    },
+    'flush' : {
+        'OK' : 'warn'
     }
 };
 
@@ -162,7 +165,7 @@ moxi.prototype.get = function (key, cb) {
     });
 };
 
-moxi.prototype.getMulti = function (keys, cb) {
+moxi.prototype.multi = moxi.prototype.getMulti = function (keys, cb) {
 
     keys.unshift('get');
 
@@ -207,37 +210,40 @@ moxi.prototype.touch = function (key, time, cb) {
     return this._call(['touch', key, time], false, moxi.expects.touch, cb);
 };
 
-moxi.prototype.incr = function (key, delta, cb) {
+moxi.prototype.increment = moxi.prototype.incr = function (key, delta, cb) {
     return this._call(['incr', key, delta], false, moxi.expects.delta, cb);
 };
 
-moxi.prototype.decr = function (key, delta, cb) {
+moxi.prototype.decrement = moxi.prototype.decr = function (key, delta, cb) {
     return this._call(['decr', key, delta], false, moxi.expects.delta, cb);
 };
 
-moxi.prototype.set = function (key, data, timeout, cb) {
-    data = data.toString();
+moxi.prototype.set = function (key, timeout, data, cb) {
     return this._call(['set', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
-moxi.prototype.add = function (key, data, timeout, cb) {
+moxi.prototype.add = function (key, timeout, data, cb) {
     data = data.toString();
     return this._call(['add', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
-moxi.prototype.replace = function (key, data, timeout, cb) {
+moxi.prototype.replace = function (key, timeout, data, cb) {
     data = data.toString();
     return this._call(['replace', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
-moxi.prototype.append = function (key, data, timeout, cb) {
+moxi.prototype.append = function (key, timeout, data, cb) {
     data = data.toString();
     return this._call(['append', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
-moxi.prototype.prepend = function (key, data, timeout, cb) {
+moxi.prototype.prepend = function (key, timeout, data, cb) {
     data = data.toString();
     return this._call(['prepend', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
+};
+
+moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
+    return this._call('flush_all', false, moxi.expects.flush, cb);
 };
 
 moxi.prototype._call = function (action, data, expect, cb) {
@@ -257,46 +263,108 @@ moxi.prototype._call = function (action, data, expect, cb) {
 
         var onDataReceived = client.on('data', function onDataReceived(data) {
 
-            var lastLine;
-            var receivedData;
-            var transmissionCompleted = false;
-            var err = false;
+            this.receivedData   += data;
 
-            this.receivedData += data;
-            receivedData = this.receivedData;
+            var dataSize                = Buffer.byteLength(data);
+            var receivedData            = this.receivedData;
+            var transmissionCompleted   = false;
+            var err                     = false;
+            var isFirstLineComplete     = receivedData.indexOf('\r\n') !== false;
+            var leftToReceive;
+
+            // Don't bother checking the outcome (NOT SURE... if this is safe)
+            if (this.leftToReceive - dataSize > 0) {
+                this.leftToReceive -= dataSize;
+                this.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action)
+                return;
+            }
+            console.log("passing", dataSize, this.leftToReceive, this.leftToReceive - dataSize);
 
             // Here we deal with general error messages
-            if (receivedData.indexOf('ERROR') === 0) {
-                that.pool.error('ERROR: This call was invalid', action);
-                transmissionCompleted = true;
-                err = true;
-            }
-            else if (receivedData.indexOf('CLIENT_ERROR') === 0) {
-                that.pool.error('ERROR: This call was invalid', action);
-                transmissionCompleted = true;
-                err = true;
-            }
-            else if (receivedData.indexOf('SERVER_ERROR') === 0) {
-                that.pool.error('ERROR: This call was invalid', action);
-                transmissionCompleted = true;
-                err = true;
-            }
-            else if (command === 'incr' || command === 'decr') {
-                transmissionCompleted = true;
-            }
-            else {
+            if (isFirstLineComplete && !this.firstLineChecked) {
 
-                lastLine = receivedData.split('\r\n').slice(-2).join('');
+                if (receivedData.indexOf('ERROR') === 0) {
+                    that.pool.error('ERROR: This call was invalid', action);
+                    transmissionCompleted = true;
+                    err = { message: 'ERROR: This call was invalid', code : 'ERROR' };
+                }
+                else if (receivedData.indexOf('CLIENT_ERROR') === 0) {
+                    that.pool.error('ERROR: This call was invalid', action);
+                    transmissionCompleted = true;
+                    err = { message: 'ERROR: This call was invalid', code : 'CLIENT_ERROR' };
+                }
+                else if (receivedData.indexOf('SERVER_ERROR') === 0) {
+                    that.pool.error('ERROR: This call was invalid', action);
+                    transmissionCompleted = true;
+                    err = { message: 'ERROR: This call was invalid', code : 'SERVER_ERROR' };
+                }
+                // If increment or decrement, we are sure transmission is completed
+                // once the first line is received; error messages are handled with the bottom
+                // command
+                else if (command === 'incr' || command === 'decr') {
+                    transmissionCompleted = true;
+                }
 
+                // Check for expected end-of-command
+                // Depending on the command type
+                // Note that we expect a get or multiget returning no
+                // data to pass by here
                 for (var message in expect) {
-                    if (lastLine.indexOf(message) === 0) {
+                    if (receivedData.indexOf(message) === 0) {
 
                         that.pool[expect[message]]('action', action, 'returned', message);
 
                         if (expect[message] === 'error') {
-                            err = true;
+                            err = { message: 'Invalid output code', code : message };
                         }
 
+                        transmissionCompleted = true;
+                    }
+                }
+
+                // No need to check the first line again
+                this.firstLineChecked = true;
+            }
+
+            // We are getting more data, and have done a get. Lets
+            // parse the data we get
+            if (!transmissionCompleted && command === 'get') {
+
+                var buffer          = data.substr(this.leftToReceive);
+                var fullBuffer      = buffer;
+                var fullBufferSize  = Buffer.byteLength(fullBuffer);
+                var pattern         = /VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
+                var dataLength      = 0;
+                var extracted;
+
+                while (extracted = pattern.exec(fullBuffer)) {
+
+                    dataLength      = parseInt(extracted[1]);
+                    metaDataLength  = Buffer.byteLength(extracted[0]);
+
+                    if (dataLength >= fullBufferSize) {
+                        buffer = buffer.substr(metaDataLength);
+                        this.leftToReceive = dataLength - fullBufferSize + metaDataLength;
+                        that.pool.verbose( dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
+                        return;
+                    }
+
+                    buffer = buffer.substr(Buffer.byteLength(extracted[0]) + dataLength);
+
+                    if (buffer.indexOf('\r\nVALUE') === 0) {
+                        buffer = buffer.substr(2);
+                        that.pool.verbose('data end, receiving new value for action', action);
+                        continue;
+                    }
+                    else if (buffer.indexOf('\r\nEND') === 0) {
+                        that.pool[expect['END']]('action', action, 'returned', message);
+                        transmissionCompleted = true;
+                        break;
+                    }
+                    else {
+                        // Unexpected data, throw error
+                        that.pool.error('Unexpected trailing data', action, buffer);
+                        err = { message:'Unexpected trailing data', data: buffer };
                         transmissionCompleted = true;
                     }
                 }
@@ -316,6 +384,8 @@ moxi.prototype._call = function (action, data, expect, cb) {
             }
         });
 
+        client.leftToReceive = 0;
+        client.firstLineChecked = false;
         client.write(actionStr + '\r\n');
 
         if (data) {
