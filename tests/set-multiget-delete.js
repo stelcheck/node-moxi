@@ -10,16 +10,16 @@ vows.describe('Store + MultiGet').addBatch({
         'topic': function () {
             async.parallel([
                 function (cb) {
-                    client.set('test41', 'test41value', 5, cb);
+                    client.set('test41', 5, 'test41value', cb);
                 },
                 function (cb) {
-                    client.set('test42', 'test42value', 5, cb);
+                    client.set('test42', 5, 'test42value', cb);
                 },
                 function (cb) {
-                    client.set('test43', 'test43value', 5, cb);
+                    client.set('test43', 5, 'test43value', cb);
                 },
                 function (cb) {
-                    client.set('test44', 'test44value', 5, cb);
+                    client.set('test44', 5, 'test44value', cb);
                 }
             ], this.callback);
         },

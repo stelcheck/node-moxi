@@ -9,7 +9,7 @@ var imageData   = fs.readFileSync('./data/sean.jpg').toString();
 vows.describe('Store Binary').addBatch({
     'Set "test3" to "test3value"' : {
         'topic': function () {
-            client.set("test3", imageData, 3, this.callback);
+            client.set("test3", 3, imageData, this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.equal(data, 'STORED');
