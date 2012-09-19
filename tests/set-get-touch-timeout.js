@@ -24,7 +24,7 @@ vows.describe('Store + Touch + Timeout').addBatch({
                     client.touch("test5", 6, this.callback);
                 },
                 'returns "TOUCHED"': function (data) {
-                    assert.equal(data, 'TOUCHED');
+                    assert.equal(data, 'STORED');
                 },
                 'wait 4 seconds, read "test5" (expects empty)' : {
                     'topic': function () {

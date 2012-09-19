@@ -3,7 +3,7 @@ var vows   = require('vows'),
     fs     = require('fs'),
     moxi   = require('../index.js');
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211 });
+var client      = new moxi.moxi({'host' : 'localhost', port : 11211, log: true });
 var imageData   = fs.readFileSync('./data/sean.jpg').toString();
 
 vows.describe('Store Binary').addBatch({

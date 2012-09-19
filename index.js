@@ -219,6 +219,7 @@ moxi.prototype.decrement = moxi.prototype.decr = function (key, delta, cb) {
 };
 
 moxi.prototype.set = function (key, timeout, data, cb) {
+    data = data.toString();
     return this._call(['set', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
 };
 
@@ -278,7 +279,6 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 this.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action)
                 return;
             }
-            console.log("passing", dataSize, this.leftToReceive, this.leftToReceive - dataSize);
 
             // Here we deal with general error messages
             if (isFirstLineComplete && !this.firstLineChecked) {
@@ -330,33 +330,47 @@ moxi.prototype._call = function (action, data, expect, cb) {
             // parse the data we get
             if (!transmissionCompleted && command === 'get') {
 
-                var buffer          = data.substr(this.leftToReceive);
+                var buffer          = (new Buffer(data)).slice(this.leftToReceive)
+                var stringBuffer    = buffer.toString();
                 var fullBuffer      = buffer;
-                var fullBufferSize  = Buffer.byteLength(fullBuffer);
+                var fullStringBuffer    = stringBuffer;
+                var fullBufferSize  = fullBuffer.length;
                 var pattern         = /VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
                 var dataLength      = 0;
                 var extracted;
 
-                while (extracted = pattern.exec(fullBuffer)) {
+                if (stringBuffer.indexOf('\r\nEND') === 0) {
+                    that.pool[expect['END']]('action', action, 'returned', message);
+                    transmissionCompleted = true;
+                }
+                else while (extracted = pattern.exec(fullStringBuffer)) {
 
                     dataLength      = parseInt(extracted[1]);
                     metaDataLength  = Buffer.byteLength(extracted[0]);
 
                     if (dataLength >= fullBufferSize) {
-                        buffer = buffer.substr(metaDataLength);
+
+                        if (stringBuffer.indexOf('\r\nVALUE') === 0) {
+                            buffer = buffer.slice(2);
+                            metaDataLength+=2;
+                        }
+
+                        buffer = buffer.slice(metaDataLength);
                         this.leftToReceive = dataLength - fullBufferSize + metaDataLength;
                         that.pool.verbose( dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
                         return;
                     }
 
-                    buffer = buffer.substr(Buffer.byteLength(extracted[0]) + dataLength);
+                    buffer = buffer.slice(Buffer.byteLength(extracted[0]) + dataLength);
+                    stringBuffer = buffer.toString();
 
-                    if (buffer.indexOf('\r\nVALUE') === 0) {
-                        buffer = buffer.substr(2);
+                    if (stringBuffer.indexOf('\r\nVALUE') === 0) {
+                        buffer = buffer.slice(2);
+                        stringBuffer = buffer.toString();
                         that.pool.verbose('data end, receiving new value for action', action);
                         continue;
                     }
-                    else if (buffer.indexOf('\r\nEND') === 0) {
+                    else if (stringBuffer.indexOf('\r\nEND') === 0) {
                         that.pool[expect['END']]('action', action, 'returned', message);
                         transmissionCompleted = true;
                         break;
