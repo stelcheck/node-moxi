@@ -273,14 +273,18 @@ moxi.prototype._call = function (action, data, expect, cb) {
             var isFirstLineComplete     = receivedData.indexOf('\r\n') !== false;
             var leftToReceive;
 
-            // Don't bother checking the outcome (NOT SURE... if this is safe)
+            // Don't bother checking the outcome, we still have data to receive
+            // data has been stacked, let's just move along
             if (this.leftToReceive - dataSize > 0) {
                 this.leftToReceive -= dataSize;
-                this.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action)
+                this.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action);
                 return;
             }
 
-            // Here we deal with general error messages
+            // Here we deal with the first line (any return but VALUE)
+            // We deal with errors, increment/decrement returns and
+            // return messages which are defined in the list of expected
+            // return messages
             if (isFirstLineComplete && !this.firstLineChecked) {
 
                 if (receivedData.indexOf('ERROR') === 0) {
@@ -326,60 +330,67 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 this.firstLineChecked = true;
             }
 
-            // We are getting more data, and have done a get. Lets
+            // We have remaining data to consume;
+            // we are getting more data, and have done a get. Lets
             // parse the data we get
             if (!transmissionCompleted && command === 'get') {
 
-                var buffer          = (new Buffer(data)).slice(this.leftToReceive)
-                var stringBuffer    = buffer.toString();
-                var fullBuffer      = buffer;
-                var fullStringBuffer    = stringBuffer;
-                var fullBufferSize  = fullBuffer.length;
-                var pattern         = /VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
-                var dataLength      = 0;
+                var buffer           = (new Buffer(data)).slice(this.leftToReceive);
+                var stringBuffer     = buffer.toString();
+                var fullStringBuffer = stringBuffer;
+                var fullBufferSize   = buffer.length;
+                var pattern          = /\r?\n?VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
+                var dataLength       = 0;
+                var metaDataLength   = 0;
                 var extracted;
 
+                // If the last message is END, we have
+                // no other value to consume
+                // and we dont loop.
                 if (stringBuffer.indexOf('\r\nEND') === 0) {
-                    that.pool[expect['END']]('action', action, 'returned', message);
+                    that.pool[expect.END]('action', action, 'returned END');
                     transmissionCompleted = true;
                 }
-                else while (extracted = pattern.exec(fullStringBuffer)) {
+                else {
+                    while (extracted = pattern.exec(fullStringBuffer)) {
 
-                    dataLength      = parseInt(extracted[1]);
-                    metaDataLength  = Buffer.byteLength(extracted[0]);
+                        dataLength      = parseInt(extracted[1]);
+                        metaDataLength  = Buffer.byteLength(extracted[0]);
 
-                    if (dataLength >= fullBufferSize) {
-
-                        if (stringBuffer.indexOf('\r\nVALUE') === 0) {
-                            buffer = buffer.slice(2);
-                            metaDataLength+=2;
+                        // Here we deal with not completely received data
+                        // In this case, we
+                        if (dataLength >= fullBufferSize) {
+                            this.leftToReceive = dataLength - fullBufferSize + metaDataLength;
+                            that.pool.verbose(dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
+                            return;
                         }
 
-                        buffer = buffer.slice(metaDataLength);
-                        this.leftToReceive = dataLength - fullBufferSize + metaDataLength;
-                        that.pool.verbose( dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
-                        return;
-                    }
+                        // Here we deal with small reads which should come in all at once.
+                        // In this case, the while-loop should basically consume all data until
+                        // we either hit END or a data chunk larger than the expected dataSize
 
-                    buffer = buffer.slice(Buffer.byteLength(extracted[0]) + dataLength);
-                    stringBuffer = buffer.toString();
-
-                    if (stringBuffer.indexOf('\r\nVALUE') === 0) {
-                        buffer = buffer.slice(2);
+                        buffer = buffer.slice(metaDataLength + dataLength);
+                        fullBufferSize = buffer.length;
                         stringBuffer = buffer.toString();
-                        that.pool.verbose('data end, receiving new value for action', action);
-                        continue;
-                    }
-                    else if (stringBuffer.indexOf('\r\nEND') === 0) {
-                        that.pool[expect['END']]('action', action, 'returned', message);
-                        transmissionCompleted = true;
-                        break;
-                    }
-                    else {
-                        // Unexpected data, throw error
-                        that.pool.error('Unexpected trailing data', action, buffer);
-                        err = { message:'Unexpected trailing data', data: buffer };
-                        transmissionCompleted = true;
+
+                        if (stringBuffer.indexOf('\r\nVALUE') === 0) {
+                            fullBufferSize = buffer.length;
+                            stringBuffer = buffer.toString();
+                            that.pool.verbose('data end, receiving new value for action', action);
+                            continue;
+                        }
+                        else if (stringBuffer.indexOf('\r\nEND') === 0) {
+                            that.pool[expect.END]('action', action, 'returned END');
+                            transmissionCompleted = true;
+                            break;
+                        }
+                        else {
+                            // Unexpected data, throw error
+                            that.pool.error('Unexpected trailing data', action, stringBuffer.substr(0, 25));
+                            err = { message: 'Unexpected trailing data', data: stringBuffer.substr(0, 25) };
+                            transmissionCompleted = true;
+                            break;
+                        }
                     }
                 }
             }
