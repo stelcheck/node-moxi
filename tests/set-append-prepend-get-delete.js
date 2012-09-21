@@ -7,7 +7,7 @@ var client = new moxi.moxi({'host' : 'localhost', port : 11211 });
 vows.describe('Store').addBatch({
     'Set "test12" to "test12value"' : {
         'topic': function () {
-            client.set("test12", 3, "test12value", this.callback);
+            client.set("test12", "test12value", 3, this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.equal(data, 'STORED');
@@ -15,18 +15,17 @@ vows.describe('Store').addBatch({
         'append to the value of "test12"' : {
             'topic': function () {
                 var that = this;
-                client.append("test12", 3, 'appended', function(ret) {
+                client.append("test12", 'appended', 3, function(ret) {
                     client.get('test12', that.callback);
                 });
             },
             'returns "test12value"' : function (data) {
-                console.log(data);
                 assert.equal(data, 'test12valueappended');
             },
             'prepend to the value of "test12"' : {
                 'topic': function () {
                     var that = this;
-                    client.prepend("test12", 3, 'prepended', function(ret) {
+                    client.prepend("test12", 'prepended', 3, function(ret) {
                         client.get('test12', that.callback);
                     });
                 },

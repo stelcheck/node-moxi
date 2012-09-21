@@ -13,16 +13,16 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
         'topic': function () {
             async.parallel([
                 function (cb) {
-                    client.set('test81', 5, textData, cb);
+                    client.set('test81', textData, 5, cb);
                 },
                 function (cb) {
-                    client.set('test82', 5, imageData, cb);
+                    client.set('test82', imageData, 5, cb);
                 },
                 function (cb) {
-                    client.set('test83', 5, textData, cb);
+                    client.set('test83', textData, 5, cb);
                 },
                 function (cb) {
-                    client.set('test84', 5, imageData, cb);
+                    client.set('test84', imageData, 5, cb);
                 }
             ], this.callback);
         },
@@ -35,7 +35,7 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
             },
             'returns "test1value"' : function (data) {
                 assert.equal(data.test81, textData);
-                assert.equal(data.test84, imageData);
+                assert.deepEqual(data.test84, imageData);
             },
             'delete "test81-44 values"' : {
                 'topic': function () {

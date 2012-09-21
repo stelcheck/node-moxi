@@ -1,7 +1,9 @@
 var net      = require('net'),
+    util     = require('util'),
+    events   = require('events'),
     deadpool = require('generic-pool');
 
-var moxi = function (config, cb) {
+var moxi = function (config) {
 
     var poolName = [config.host, config.port].join(':');
     var pools    = moxi.pools;
@@ -110,7 +112,9 @@ var moxi = function (config, cb) {
     }
 
     this.pool = pool;
+    util.inherits(this, events.EventEmitter);
 };
+
 
 moxi.pools = {};
 moxi.expects = {
@@ -140,6 +144,11 @@ moxi.expects = {
     }
 };
 
+moxi.FLAGS = {
+    'BINARY'    : 2<<1,
+    'JSON'      : 1<<1
+};
+
 process.on('exit', function drainAllPools() {
     var pools = moxi.pools;
 
@@ -149,6 +158,7 @@ process.on('exit', function drainAllPools() {
 });
 
 moxi.prototype.get = function (key, cb) {
+    var that = this;
     return this._call(['get', key], false, moxi.expects.retrieve, function processDataOutput(err, data) {
 
         if (err) {
@@ -157,9 +167,10 @@ moxi.prototype.get = function (key, cb) {
 
         var content = data.split('\r\n');
         var meta    = content.shift().substr(6).split(" ");
-        content.pop();
 
+        content.pop();
         content = content.join('\r\n');
+        content = that._unserialize(content, meta);
 
         return cb(err, content);
     });
@@ -167,6 +178,8 @@ moxi.prototype.get = function (key, cb) {
 
 moxi.prototype.multi = moxi.prototype.getMulti = function (keys, cb) {
 
+
+    var that = this;
     keys.unshift('get');
 
     return this._call(keys, false, moxi.expects.retrieve, function processMultiDataOutput(err, data) {
@@ -194,8 +207,9 @@ moxi.prototype.multi = moxi.prototype.getMulti = function (keys, cb) {
                 content.pop();
             }
 
-            key = meta[0];
-            res[key] = content.join('\r\n');
+            key         = meta[0];
+            content     = content.join('\r\n');
+            res[key]    = that._unserialize(content, meta);
         }
 
         cb(err, res);
@@ -218,29 +232,39 @@ moxi.prototype.decrement = moxi.prototype.decr = function (key, delta, cb) {
     return this._call(['decr', key, delta], false, moxi.expects.delta, cb);
 };
 
-moxi.prototype.set = function (key, timeout, data, cb) {
-    data = data.toString();
-    return this._call(['set', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
+moxi.prototype.set = function (key, data, timeout, cb) {
+    var info = this._serialize(data);
+    return this._call(['set', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
 };
 
-moxi.prototype.add = function (key, timeout, data, cb) {
-    data = data.toString();
-    return this._call(['add', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
+moxi.prototype.add = function (key, data, timeout, cb) {
+    var info = this._serialize(data);
+    return this._call(['add', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
 };
 
-moxi.prototype.replace = function (key, timeout, data, cb) {
-    data = data.toString();
-    return this._call(['replace', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
+moxi.prototype.replace = function (key, data, timeout, cb) {
+    var info = this._serialize(data);
+    return this._call(['replace', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
 };
 
-moxi.prototype.append = function (key, timeout, data, cb) {
-    data = data.toString();
-    return this._call(['append', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
+moxi.prototype.append = function (key, data, timeout, cb) {
+    var info = this._serialize(data);
+
+    if (info[1] === moxi.FLAGS.JSON) {
+        return cb({message: 'cannot append on json data'});
+    }
+
+    return this._call(['append', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
 };
 
-moxi.prototype.prepend = function (key, timeout, data, cb) {
-    data = data.toString();
-    return this._call(['prepend', key, '0', timeout, Buffer.byteLength(data)], data, moxi.expects.store, cb);
+moxi.prototype.prepend = function (key, data, timeout, cb) {
+    var info = this._serialize(data);
+
+    if (info[1] === moxi.FLAGS.JSON) {
+        return cb({message: 'cannot append on json data'});
+    }
+
+    return this._call(['append', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
 };
 
 moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
@@ -265,6 +289,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
         var onDataReceived = client.on('data', function onDataReceived(data) {
 
             this.receivedData   += data;
+            data = this.remainderBuffer + data;
 
             var dataSize                = Buffer.byteLength(data);
             var receivedData            = this.receivedData;
@@ -277,7 +302,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
             // data has been stacked, let's just move along
             if (this.leftToReceive - dataSize > 0) {
                 this.leftToReceive -= dataSize;
-                this.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action);
+                that.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action);
                 return;
             }
 
@@ -333,12 +358,12 @@ moxi.prototype._call = function (action, data, expect, cb) {
             // We have remaining data to consume;
             // we are getting more data, and have done a get. Lets
             // parse the data we get
-            if (!transmissionCompleted && command === 'get') {
+            if (!transmissionCompleted) {
 
                 var buffer           = (new Buffer(data)).slice(this.leftToReceive);
                 var stringBuffer     = buffer.toString();
                 var fullStringBuffer = stringBuffer;
-                var fullBufferSize   = buffer.length;
+                var bufferSize   = buffer.length;
                 var pattern          = /\r?\n?VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
                 var dataLength       = 0;
                 var metaDataLength   = 0;
@@ -359,8 +384,8 @@ moxi.prototype._call = function (action, data, expect, cb) {
 
                         // Here we deal with not completely received data
                         // In this case, we
-                        if (dataLength >= fullBufferSize) {
-                            this.leftToReceive = dataLength - fullBufferSize + metaDataLength;
+                        if (dataLength + metaDataLength > bufferSize) {
+                            this.leftToReceive = dataLength + metaDataLength - bufferSize;
                             that.pool.verbose(dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
                             return;
                         }
@@ -369,29 +394,43 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         // In this case, the while-loop should basically consume all data until
                         // we either hit END or a data chunk larger than the expected dataSize
 
-                        buffer = buffer.slice(metaDataLength + dataLength);
-                        fullBufferSize = buffer.length;
+                        // Consume the data
+                        try {
+                            buffer = buffer.slice(metaDataLength + dataLength);
+                        } catch (e) {
+                            console.log(e, buffer.toString());
+                        }
+
+                        bufferSize = buffer.length;
                         stringBuffer = buffer.toString();
 
-                        if (stringBuffer.indexOf('\r\nVALUE') === 0) {
-                            fullBufferSize = buffer.length;
+                        // Once the data is consumed, we should have either VALUE or END
+
+                        // If the remainder of the buffer matched exactly
+                        // the expected data length, we break out. We
+                        // expect to receive more data on another batch
+                        if (bufferSize === 0){
+                            return;
+                        }
+                        // If VALUE, continue the loop
+                        else if (stringBuffer.indexOf('\r\nVALUE') === 0) {
+                            bufferSize = buffer.length;
                             stringBuffer = buffer.toString();
                             that.pool.verbose('data end, receiving new value for action', action);
                             continue;
                         }
+                        // If END, transmission is completed correctly, were done
                         else if (stringBuffer.indexOf('\r\nEND') === 0) {
                             that.pool[expect.END]('action', action, 'returned END');
                             transmissionCompleted = true;
                             break;
                         }
-                        else {
-                            // Unexpected data, throw error
-                            that.pool.error('Unexpected trailing data', action, stringBuffer.substr(0, 25));
-                            err = { message: 'Unexpected trailing data', data: stringBuffer.substr(0, 25) };
-                            transmissionCompleted = true;
-                            break;
-                        }
                     }
+
+                    // This is for cases where we have fragment
+                    // VALUE statement comming in; we pass them on
+                    // to the next data reception
+                    this.remainderBuffer = stringBuffer;
                 }
             }
 
@@ -403,20 +442,61 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 this.removeListener('data', onDataReceived);
                 that.pool.release(this);
 
+                // that.pool.verbose('passing data to callback', receivedData);
                 if (cb) {
                     cb(err, receivedData);
                 }
             }
         });
 
+        // Set some client metadata for this
+        // current call
         client.leftToReceive = 0;
         client.firstLineChecked = false;
+        client.remainderBuffer = "";
+
         client.write(actionStr + '\r\n');
 
         if (data) {
             client.write(data + '\r\n');
         }
     });
+};
+
+moxi.prototype._serialize = function (data) {
+
+    var flag = 0;
+    var length = 0;
+    var dataType = typeof data;
+
+    if (Buffer.isBuffer(data)) {
+      flag = moxi.FLAGS.BINARY;
+      data = data.toString('binary');
+    } else if (dataType !== 'string' && dataType !== 'number') {
+      flag = moxi.FLAGS.JSON;
+      data = JSON.stringify(data);
+    } else {
+      data = data.toString();
+    }
+
+    return [data, flag, Buffer.byteLength(data)];
+};
+
+moxi.prototype._unserialize = function (data, meta) {
+    switch (parseInt(meta[1])) {
+        case moxi.FLAGS.JSON:
+        data = JSON.parse(data);
+        break;
+        case moxi.FLAGS.BINARY:
+        tmp = new Buffer(data.length);
+        tmp.write(data, 0, 'binary');
+        data = tmp;
+        break;
+        default:
+        break;
+    }
+
+    return data;
 };
 
 exports.moxi = moxi;

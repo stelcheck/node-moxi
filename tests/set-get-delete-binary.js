@@ -3,13 +3,13 @@ var vows   = require('vows'),
     fs     = require('fs'),
     moxi   = require('../index.js');
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211, log: true });
-var imageData   = fs.readFileSync('./data/sean.jpg').toString();
+var client      = new moxi.moxi({'host' : 'localhost', port : 11211 });
+var imageData   = fs.readFileSync('./data/sean.jpg');
 
 vows.describe('Store Binary').addBatch({
     'Set "test3" to "test3value"' : {
         'topic': function () {
-            client.set("test3", 3, imageData, this.callback);
+            client.set("test3", imageData, 3, this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.equal(data, 'STORED');
@@ -19,7 +19,7 @@ vows.describe('Store Binary').addBatch({
                 client.get("test3", this.callback);
             },
             'returns "test3value"' : function (data) {
-                assert.equal(data, imageData);
+                assert.deepEqual(data, imageData);
             },
             'delete "test3"' : {
                 'topic': function () {

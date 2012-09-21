@@ -4,7 +4,7 @@ var vows   = require('vows'),
     async   = require('async'),
     moxi   = require('../index.js');
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211, log : true });
+var client      = new moxi.moxi({'host' : 'localhost', port : 11211 });
 var imageData   = fs.readFileSync('./data/sean.jpg');
 var textData    = fs.readFileSync('./data/512k.txt');
 
@@ -13,16 +13,16 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
         'topic': function () {
             async.parallel([
                 function (cb) {
-                    client.set('test121', 5, textData, cb);
+                    client.set('test121', textData, 5, cb);
                 },
                 function (cb) {
-                    client.set('test122', 5, 'bravo', cb);
+                    client.set('test122', 'bravo', 5, cb);
                 },
                 function (cb) {
-                    client.set('test123', 5, 'charlie', cb);
+                    client.set('test123', 'charlie', 5, cb);
                 },
                 function (cb) {
-                    client.set('test124', 5, imageData, cb);
+                    client.set('test124', imageData, 5, cb);
                 }
             ], this.callback);
         },

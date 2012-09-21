@@ -7,21 +7,21 @@ var client = new moxi.moxi({'host' : 'localhost', port : 11211 });
 vows.describe('Store').addBatch({
     'Replace "test15" as "test15value"' : {
         'topic': function () {
-            client.replace("test15", 3, "test15value", this.callback);
+            client.replace("test15", "test15value", 3, this.callback);
         },
         'returns "NOT_STORED"' : function (data) {
             assert.equal(data, 'NOT_STORED');
         },
         'Set "test15" as "test15value"' : {
             'topic': function () {
-                client.set("test15", 3, 'test15value', this.callback);
+                client.set("test15", 'test15value', 3, this.callback);
             },
             'returns "STORED"' : function (data) {
                 assert.equal(data, 'STORED');
             },
             'Replace "test15" again' : {
                 'topic': function () {
-                    client.replace("test15", 3, "test15othervalue", this.callback);
+                    client.replace("test15", "test15othervalue", 3, this.callback);
                 },
                 'returns "STORED"' : function (data) {
                     assert.equal(data, 'STORED');
