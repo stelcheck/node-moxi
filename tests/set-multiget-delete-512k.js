@@ -34,7 +34,7 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
                 client.getMulti(['test81', 'test82', 'test83', 'test84'], this.callback);
             },
             'returns "test1value"' : function (data) {
-                assert.equal(data.test81, textData);
+                assert.deepEqual(data.test81, textData);
                 assert.deepEqual(data.test84, imageData);
             },
             'delete "test81-44 values"' : {

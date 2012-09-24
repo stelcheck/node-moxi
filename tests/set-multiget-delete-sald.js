@@ -34,10 +34,10 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
                 client.getMulti(['test121', 'test122', 'test123', 'test124'], this.callback);
             },
             'returns "test1value"' : function (data) {
-                assert.equal(data.test121, textData);
+                assert.deepEqual(data.test121, textData);
                 assert.equal(data.test122, 'bravo');
                 assert.equal(data.test123, 'charlie');
-                assert.equal(data.test124, imageData);
+                assert.deepEqual(data.test124, imageData);
             },
             'delete "test121-44 values"' : {
                 'topic': function () {
