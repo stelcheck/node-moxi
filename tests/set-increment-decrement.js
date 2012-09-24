@@ -7,7 +7,7 @@ var client = new moxi.moxi({'host' : 'localhost', port : 11211 });
 vows.describe('Store').addBatch({
     'Set "test6" to "test6value"' : {
         'topic': function () {
-            client.set("test6", 10, 0, this.callback);
+            client.set("test6", 0, 10, this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.equal(data, 'STORED');

@@ -264,7 +264,7 @@ moxi.prototype.prepend = function (key, data, timeout, cb) {
         return cb({message: 'cannot append on json data'});
     }
 
-    return this._call(['append', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
+    return this._call(['prepend', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
 };
 
 moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
