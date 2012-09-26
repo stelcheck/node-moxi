@@ -9,11 +9,6 @@ var moxi = function (config) {
     var pools    = moxi.pools;
     var pool     = moxi.pools[poolName];
     var configLog = config.log;
-    var logTypes = ['verbose', 'info', 'warn', 'error'];
-    var logType;
-    var logTypeDatatype;
-    var i;
-    var emptyFunction = function () {};
 
     if (!pool) {
 
@@ -57,67 +52,24 @@ var moxi = function (config) {
             client.pool = pool;
         };
 
+        // destroy the client on destroy
         config.destroy = function closeConnection(client) {
             client.destroy();
         };
 
         config.log = null;
-        pool = deadpool.Pool(config);
-
-        if (typeof(configLog) === 'object') {
-
-            for (i in logTypes) {
-
-                logType = logTypes[i];
-                logTypeDatatype = typeof(configLog[logType]);
-
-                if (logTypeDatatype === 'function') {
-                    pool[logType] = configLog[logType];
-                    continue;
-                }
-                else if (logTypeDatatype === 'undefined') {
-                    pool[logType] = emptyFunction;
-                    continue;
-                }
-
-                switch (logType) {
-                case 'verbose':
-                    pool.verbose = console.log;
-                    break;
-                case 'info':
-                    pool.info = console.info;
-                    break;
-                case 'warn':
-                    pool.warn = console.warn;
-                    break;
-                case 'error':
-                    pool.error = console.error;
-                    break;
-                default:
-                    console.warn('WARNING: configuration for logging', logType, 'has been set, but is not an available log channel');
-                }
-            }
-        }
-        else if (configLog === true) {
-            pool.verbose =  console.log;
-            pool.info    =  console.info;
-            pool.warn    =  console.warn;
-            pool.error   =  console.error;
-        }
-        else {
-            pool.verbose = pool.info = pool.warn = pool.error = emptyFunction;
-        }
-
-        moxi.pools[poolName] = pool;
+        pool = moxi.pools[poolName] = this._setLogging(deadpool.Pool(config), configLog);
     }
 
     this.pool = pool;
     util.inherits(this, events.EventEmitter);
 };
 
-
+// All pools. This is a global var for all moxi instance
 moxi.pools = {};
-moxi.expects = {
+
+// Expected return codes for supported calls
+moxi.prototype.expects = {
     'store' : {
         'STORED'        : 'verbose',
         'NOT_STORED'    : 'warn',
@@ -144,11 +96,13 @@ moxi.expects = {
     }
 };
 
-moxi.FLAGS = {
+// Flags, taken out of node-memcached
+moxi.prototype.FLAGS = {
     'BINARY'    : 2<<1,
     'JSON'      : 1<<1
 };
 
+// On exit, drain pool
 process.on('exit', function drainAllPools() {
     var pools = moxi.pools;
 
@@ -157,9 +111,10 @@ process.on('exit', function drainAllPools() {
     }
 });
 
+// Starting here, a list of calls doable with this module
 moxi.prototype.get = function (key, cb) {
     var that = this;
-    return this._call(['get', key], false, moxi.expects.retrieve, function processDataOutput(err, data) {
+    return this._call(['get', key], false, this.expects.retrieve, function processDataOutput(err, data) {
 
         if (err) {
             return cb(err, data);
@@ -178,11 +133,10 @@ moxi.prototype.get = function (key, cb) {
 
 moxi.prototype.multi = moxi.prototype.getMulti = function (keys, cb) {
 
-
     var that = this;
     keys.unshift('get');
 
-    return this._call(keys, false, moxi.expects.retrieve, function processMultiDataOutput(err, data) {
+    return this._call(keys, false, this.expects.retrieve, function processMultiDataOutput(err, data) {
 
         if (err || data === 'END') {
             return cb(err, {});
@@ -217,58 +171,58 @@ moxi.prototype.multi = moxi.prototype.getMulti = function (keys, cb) {
 };
 
 moxi.prototype.del = function (key, cb) {
-    return this._call(['delete', key], false, moxi.expects.del, cb);
+    return this._call(['delete', key], false, this.expects.del, cb);
 };
 
 moxi.prototype.touch = function (key, time, cb) {
-    return this._call(['touch', key, time], false, moxi.expects.touch, cb);
+    return this._call(['touch', key, time], false, this.expects.touch, cb);
 };
 
 moxi.prototype.increment = moxi.prototype.incr = function (key, delta, cb) {
-    return this._call(['incr', key, delta], false, moxi.expects.delta, cb);
+    return this._call(['incr', key, delta], false, this.expects.delta, cb);
 };
 
 moxi.prototype.decrement = moxi.prototype.decr = function (key, delta, cb) {
-    return this._call(['decr', key, delta], false, moxi.expects.delta, cb);
+    return this._call(['decr', key, delta], false, this.expects.delta, cb);
 };
 
 moxi.prototype.set = function (key, data, timeout, cb) {
     var info = this._serialize(data);
-    return this._call(['set', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
+    return this._call(['set', key, info[1], timeout, info[2]], info[0], this.expects.store, cb);
 };
 
 moxi.prototype.add = function (key, data, timeout, cb) {
     var info = this._serialize(data);
-    return this._call(['add', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
+    return this._call(['add', key, info[1], timeout, info[2]], info[0], this.expects.store, cb);
 };
 
 moxi.prototype.replace = function (key, data, timeout, cb) {
     var info = this._serialize(data);
-    return this._call(['replace', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
+    return this._call(['replace', key, info[1], timeout, info[2]], info[0], this.expects.store, cb);
 };
 
 moxi.prototype.append = function (key, data, timeout, cb) {
     var info = this._serialize(data);
 
-    if (info[1] === moxi.FLAGS.JSON) {
+    if (info[1] === this.FLAGS.JSON) {
         return cb({message: 'cannot append on json data'});
     }
 
-    return this._call(['append', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
+    return this._call(['append', key, info[1], timeout, info[2]], info[0], this.expects.store, cb);
 };
 
 moxi.prototype.prepend = function (key, data, timeout, cb) {
     var info = this._serialize(data);
 
-    if (info[1] === moxi.FLAGS.JSON) {
+    if (info[1] === this.FLAGS.JSON) {
         return cb({message: 'cannot append on json data'});
     }
 
-    return this._call(['prepend', key, info[1], timeout, info[2]], info[0], moxi.expects.store, cb);
+    return this._call(['prepend', key, info[1], timeout, info[2]], info[0], this.expects.store, cb);
 };
 
 moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
-    return this._call('flush_all', false, moxi.expects.flush, cb);
+    return this._call('flush_all', false, this.expects.flush, cb);
 };
 
 moxi.prototype._call = function (action, data, expect, cb) {
@@ -284,24 +238,32 @@ moxi.prototype._call = function (action, data, expect, cb) {
             return cb(err, client);
         }
 
-        client.receivedData = '';
+        // Set some client metadata for this
+        // current call
+        client.receivedData     = '';
+        client.leftToReceive    = 0;
+        client.firstLineChecked = false;
+        client.remainderBuffer  = '';
 
+        // Data reception
         var onDataReceived = client.on('data', function onDataReceived(data) {
 
-            this.receivedData   += data;
-            data = this.remainderBuffer + data;
+            // Appending to buffer, setting the data which
+            // we have to parse on this round
+            this.receivedData           += data;
+            data                        = this.remainderBuffer + data;
 
+            // Variable definition
             var dataSize                = Buffer.byteLength(data);
             var receivedData            = this.receivedData;
             var transmissionCompleted   = false;
             var err                     = false;
-            var isFirstLineComplete     = receivedData.indexOf('\r\n') !== false;
-            var leftToReceive;
+            var leftToReceive           = this.leftToReceive;
 
             // Don't bother checking the outcome, we still have data to receive
             // data has been stacked, let's just move along
-            if (this.leftToReceive - dataSize > 0) {
-                this.leftToReceive -= dataSize;
+            if (leftToReceive - dataSize > 0) {
+                leftToReceive = this.leftToReceive -= dataSize;
                 that.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action);
                 return;
             }
@@ -310,29 +272,17 @@ moxi.prototype._call = function (action, data, expect, cb) {
             // We deal with errors, increment/decrement returns and
             // return messages which are defined in the list of expected
             // return messages
-            if (isFirstLineComplete && !this.firstLineChecked) {
+            // Note: we assume that the buffer size will always be bigger than a first line response
+            if (!this.firstLineChecked) {
 
-                if (receivedData.indexOf('ERROR') === 0) {
-                    that.pool.error('ERROR: This call was invalid', action);
-                    transmissionCompleted = true;
-                    err = { message: 'ERROR: This call was invalid', code : 'ERROR' };
-                }
-                else if (receivedData.indexOf('CLIENT_ERROR') === 0) {
-                    that.pool.error('ERROR: This call was invalid', action);
-                    transmissionCompleted = true;
-                    err = { message: 'ERROR: This call was invalid', code : 'CLIENT_ERROR' };
-                }
-                else if (receivedData.indexOf('SERVER_ERROR') === 0) {
-                    that.pool.error('ERROR: This call was invalid', action);
-                    transmissionCompleted = true;
-                    err = { message: 'ERROR: This call was invalid', code : 'SERVER_ERROR' };
-                }
-                // If increment or decrement, we are sure transmission is completed
-                // once the first line is received; error messages are handled with the bottom
-                // command
-                else if (command === 'incr' || command === 'decr') {
+                // If we are doing increment/
+                if (command === 'incr' || command === 'decr') {
                     transmissionCompleted = true;
                 }
+
+                // These are errors which can apply to
+                // everyone; we add them to the expect object
+                expect.ERROR = expect.CLIENT_ERROR = expect.SERVER_ERROR = 'error'
 
                 // Check for expected end-of-command
                 // Depending on the command type
@@ -344,7 +294,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         that.pool[expect[message]]('action', action, 'returned', message);
 
                         if (expect[message] === 'error') {
-                            err = { message: 'Invalid output code', code : message };
+                            err = { message: 'Error / Invalid output code', code : message };
                         }
 
                         transmissionCompleted = true;
@@ -361,13 +311,16 @@ moxi.prototype._call = function (action, data, expect, cb) {
             if (!transmissionCompleted) {
 
                 var buffer           = (new Buffer(data)).slice(this.leftToReceive);
-                var stringBuffer     = buffer.toString();
-                var fullStringBuffer = stringBuffer;
-                var bufferSize   = buffer.length;
+                var bufferSize       = buffer.length;
+
+                // fullStringBuffer
+                var fullStringBuffer = buffer.toString();
+                var stringBuffer     = fullStringBuffer.substr(0,7);
+
                 var pattern          = /\r?\n?VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
                 var dataLength       = 0;
                 var metaDataLength   = 0;
-                var extracted;
+                var extracted        = [];
 
                 // If the last message is END, we have
                 // no other value to consume
@@ -402,7 +355,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         }
 
                         bufferSize = buffer.length;
-                        stringBuffer = buffer.toString();
+                        stringBuffer = buffer.toString().substr(0,7);
 
                         // Once the data is consumed, we should have either VALUE or END
 
@@ -415,7 +368,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         // If VALUE, continue the loop
                         else if (stringBuffer.indexOf('\r\nVALUE') === 0) {
                             bufferSize = buffer.length;
-                            stringBuffer = buffer.toString();
+                            stringBuffer = buffer.toString().substr(0,7);
                             that.pool.verbose('data end, receiving new value for action', action);
                             continue;
                         }
@@ -430,33 +383,31 @@ moxi.prototype._call = function (action, data, expect, cb) {
                     // This is for cases where we have fragment
                     // VALUE statement comming in; we pass them on
                     // to the next data reception
-                    this.remainderBuffer = stringBuffer;
+                    this.remainderBuffer = buffer.toString();
                 }
             }
 
             // Once we get an end of transmission message, we release the connection
             // and return the data (and error if applicable)
             if (transmissionCompleted) {
+                // removing two chars \r\n at the end
+                // removing listener on the connection
+                // releasing the connection back in the pool
 
                 receivedData = receivedData.substr(0, receivedData.length - 2);
                 this.removeListener('data', onDataReceived);
                 that.pool.release(this);
 
-                // that.pool.verbose('passing data to callback', receivedData);
                 if (cb) {
                     cb(err, receivedData);
                 }
             }
         });
 
-        // Set some client metadata for this
-        // current call
-        client.leftToReceive = 0;
-        client.firstLineChecked = false;
-        client.remainderBuffer = "";
-
+        // Fire away call
         client.write(actionStr + '\r\n');
 
+        // If data, fire away data
         if (data) {
             client.write(data + '\r\n');
         }
@@ -470,10 +421,10 @@ moxi.prototype._serialize = function (data) {
     var dataType = typeof data;
 
     if (Buffer.isBuffer(data)) {
-      flag = moxi.FLAGS.BINARY;
+      flag = this.FLAGS.BINARY;
       data = data.toString('binary');
     } else if (dataType !== 'string' && dataType !== 'number') {
-      flag = moxi.FLAGS.JSON;
+      flag = this.FLAGS.JSON;
       data = JSON.stringify(data);
     } else {
       data = data.toString();
@@ -484,10 +435,10 @@ moxi.prototype._serialize = function (data) {
 
 moxi.prototype._unserialize = function (data, meta) {
     switch (parseInt(meta[1])) {
-        case moxi.FLAGS.JSON:
+        case this.FLAGS.JSON:
         data = JSON.parse(data);
         break;
-        case moxi.FLAGS.BINARY:
+        case this.FLAGS.BINARY:
         tmp = new Buffer(data.length);
         tmp.write(data, 0, 'binary');
         data = tmp;
@@ -497,6 +448,60 @@ moxi.prototype._unserialize = function (data, meta) {
     }
 
     return data;
+};
+
+moxi.prototype._setLogging = function (pool, configLog) {
+
+    var logTypes = ['verbose', 'info', 'warn', 'error'];
+    var logType;
+    var logTypeDatatype;
+    var emptyFunction = function () {};
+
+    if (typeof(configLog) === 'object') {
+
+        for (var i in logTypes) {
+
+            logType = logTypes[i];
+            logTypeDatatype = typeof(configLog[logType]);
+
+            if (logTypeDatatype === 'function') {
+                pool[logType] = configLog[logType];
+                continue;
+            }
+            else if (logTypeDatatype === 'undefined') {
+                pool[logType] = emptyFunction;
+                continue;
+            }
+
+            switch (logType) {
+            case 'verbose':
+                pool.verbose = console.log;
+                break;
+            case 'info':
+                pool.info = console.info;
+                break;
+            case 'warn':
+                pool.warn = console.warn;
+                break;
+            case 'error':
+                pool.error = console.error;
+                break;
+            default:
+                console.warn('WARNING: configuration for logging', logType, 'has been set, but is not an available log channel');
+            }
+        }
+    }
+    else if (configLog === true) {
+        pool.verbose =  console.log;
+        pool.info    =  console.info;
+        pool.warn    =  console.warn;
+        pool.error   =  console.error;
+    }
+    else {
+        pool.verbose = pool.info = pool.warn = pool.error = emptyFunction;
+    }
+
+    return pool;
 };
 
 exports.moxi = moxi;
