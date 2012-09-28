@@ -103,16 +103,16 @@ moxi.prototype.bufferCode = {
 
 // These are errors which can apply to
 // everyone; we add them to the expect object
-for(var key in moxi.prototype.expects) {
+for (var key in moxi.prototype.expects) {
     moxi.prototype.expects[key].ERROR           = 'error';
     moxi.prototype.expects[key].CLIENT_ERROR    = 'error';
-    moxi.prototype.expects[key].SERVER_ERROR    = 'error'
+    moxi.prototype.expects[key].SERVER_ERROR    = 'error';
 
     for (var subkey in moxi.prototype.expects[key]) {
         moxi.prototype.bufferCode[subkey] = new Buffer(subkey);
         moxi.prototype.bufferCode[subkey + '\r\n'] = new Buffer(subkey + '\r\n');
     }
-};
+}
 
 
 // Flags, taken out of node-memcached
@@ -240,6 +240,8 @@ moxi.prototype._call = function (action, data, expect, cb) {
             var transmissionCompleted   = false;
             var err                     = false;
             var leftToReceive           = this.leftToReceive;
+            var currentData             = '';
+            var leftOverData           = '';
 
             // Don't bother checking the outcome, we still have data to receive
             // data has been stacked, let's just move along
@@ -301,7 +303,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 // you should be able to receive buffer instead of string
                 if (this.currentKey) {
                     currentData  = this.returnData[this.currentKey];
-                    leftOverData = data.slice(0, this.leftToReceive -2);
+                    leftOverData = data.slice(0, this.leftToReceive - 2);
                     this.returnData[this.currentKey] = Buffer.concat([currentData, leftOverData], currentData.length + leftOverData.length);
                     this.returnData[this.currentKey] = that._unserialize(this.returnData[this.currentKey], this.currentMetaData);
                     delete this.currentKey;
@@ -314,6 +316,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 var callBuffer      = this.callBuffer;
 
                 var dataLength       = 0;
+                var metaData         = null;
                 var metaDataLength   = 0;
 
                 // If the last message is END, we have
@@ -326,10 +329,10 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 else {
                     while (callBuffer.equals('VALUE')) {
 
-                        pos             = buffer.indexOf('\r');
-                        metaData        = buffer.slice(6,pos).toString().split(' ');
+                        var pos             = buffer.indexOf('\r');
+                        metaData        = buffer.slice(6, pos).toString().split(' ');
                         dataLength      = parseInt(metaData[2]);
-                        metaDataLength  = pos+2;
+                        metaDataLength  = pos + 2;
                         this.currentKey = metaData[0];
 
                         // Here we deal with not completely received data
@@ -357,7 +360,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         // If the remainder of the buffer matched exactly
                         // the expected data length, we break out. We
                         // expect to receive more data on another batch
-                        if (bufferSize === 0){
+                        if (bufferSize === 0) {
                             return;
                         }
                         // If VALUE, continue the loop
@@ -388,8 +391,10 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 // releasing the connection back in the pool
 
                 this.removeListener('data', onDataReceived);
-                ret = this.returnData;
+
+                var ret = this.returnData;
                 delete this.returnData;
+
                 that.pool.release(this);
 
                 if (cb) {
@@ -416,13 +421,13 @@ moxi.prototype._serialize = function (data) {
     var dataType = typeof data;
 
     if (Buffer.isBuffer(data)) {
-      flag = this.FLAGS.BINARY;
-      data = data.toString('binary');
+        flag = this.FLAGS.BINARY;
+        data = data.toString('binary');
     } else if (dataType !== 'string' && dataType !== 'number') {
-      flag = this.FLAGS.JSON;
-      data = JSON.stringify(data);
+        flag = this.FLAGS.JSON;
+        data = JSON.stringify(data);
     } else {
-      data = data.toString();
+        data = data.toString();
     }
 
     return [data, flag, Buffer.byteLength(data, 'binary')];
@@ -430,12 +435,12 @@ moxi.prototype._serialize = function (data) {
 
 moxi.prototype._unserialize = function (data, meta) {
     switch (parseInt(meta[1])) {
-        case this.FLAGS.JSON:
+    case this.FLAGS.JSON:
         data = JSON.parse(data);
         break;
-        case this.FLAGS.BINARY:
+    case this.FLAGS.BINARY:
         break;
-        default:
+    default:
         data = data.toString();
         break;
     }

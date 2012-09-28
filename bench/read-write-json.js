@@ -30,7 +30,7 @@ var data        = {
             }
         }
     }
-}
+};
 
 // We allow JSON file if necessary
 if (filename) {
@@ -68,7 +68,7 @@ client.set(filename, data, 0, function (err, code) {
 
     ts          = new Date().getTime();
 
-    client.get(filename, function(err, data) {
+    client.get(filename, function (err, data) {
         if (err) {
             console.error('ERROR!', err);
             process.exit(1);

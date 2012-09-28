@@ -5,6 +5,7 @@
 # - git to be installed
 # - jshint to be installed
 
+PATH="$PATH:./node_modules/.bin/";
 
 path=`pwd`
 cd `git rev-parse --show-toplevel`
@@ -13,8 +14,8 @@ files=`find . -name "*.js" -not -regex "^\./node_modules\(.*\)"`
 
 if [[ -z "$files" ]]
 then
-	echo No JavaScript files to lint.
-	exit 0
+    echo No JavaScript files to lint.
+    exit 0
 fi
 
 jshint $files --config ./scripts/jshint.cfg

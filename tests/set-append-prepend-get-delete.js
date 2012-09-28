@@ -15,7 +15,7 @@ vows.describe('Store').addBatch({
         'append to the value of "test12"' : {
             'topic': function () {
                 var that = this;
-                client.append("test12", 'appended', 3, function(ret) {
+                client.append("test12", 'appended', 3, function (ret) {
                     client.get('test12', that.callback);
                 });
             },
@@ -25,7 +25,7 @@ vows.describe('Store').addBatch({
             'prepend to the value of "test12"' : {
                 'topic': function () {
                     var that = this;
-                    client.prepend("test12", 'prepended', 3, function(ret) {
+                    client.prepend("test12", 'prepended', 3, function (ret) {
                         client.get('test12', that.callback);
                     });
                 },

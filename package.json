@@ -17,7 +17,8 @@
         "generic-pool" : "2.0.1"
     },
     "devDependencies": {
-        "vows": "0.6.2"
+        "vows": "0.6.2",
+        "jshint": "0.9.1"
     },
     "repository": {
         "type": "git",
