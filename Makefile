@@ -25,9 +25,21 @@ lint:
 lint-all:
 	./scripts/lint-all.sh
 
-# target: bench, runs a benchmark with different files from data/
+# target: benchmark, runs a benchmark with different files from data/
 benchmark:
 	./scripts/benchmark.sh
+
+# target: benchmark-string, runs a benchmark with different string data using files from data/
+benchmark-string:
+	./scripts/benchmark.sh -s
+
+# target: benchmark-json, runs a benchmark with different json data using files from data/
+benchmark-json:
+	./scripts/benchmark.sh -j
+
+# target: benchmark-binary, runs a benchmark with different binary data using files from data/ (same files as for string test)
+benchmark-binary:
+	./scripts/benchmark.sh -b
 
 # target: git-setup, Sets up git hooks.
 git-setup:
