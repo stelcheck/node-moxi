@@ -1,7 +1,7 @@
 {
     "name": "node-moxi",
     "description": "Node.js Connector to Moxi, the Membase/Couchbase proxy",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "author": "Wizcorp K.K. <info@wizcorp.jp>",
     "homepage": "http://www.wizcorp.jp",
     "bugs": {
