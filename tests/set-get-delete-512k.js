@@ -19,7 +19,7 @@ vows.describe('Store Large Text Data (512k data block)').addBatch({
                 client.get("test7", this.callback);
             },
             'returns "test7value"' : function (data) {
-                assert.equal(data, imageData);
+                assert.deepEqual(data, imageData);
             },
             'delete "test7"' : {
                 'topic': function () {

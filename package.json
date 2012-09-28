@@ -1,7 +1,7 @@
 {
     "name": "node-moxi",
     "description": "Node.js Connector to Moxi, the Membase/Couchbase proxy",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "author": "Wizcorp K.K. <info@wizcorp.jp>",
     "homepage": "http://www.wizcorp.jp",
     "bugs": {
@@ -9,7 +9,7 @@
         "url": "http://github.com/Wizcorp/Mithril/issues"
     },
     "engines": {
-        "node": ">=0.4.12"
+        "node": ">=0.8.1"
     },
     "dependencies": {
         "async"        : "0.1.22",
