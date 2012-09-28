@@ -1,6 +1,6 @@
 var fs     = require('fs'),
     util   = require('util'),
-    moxi   = require('../index.js');
+    moxi   = require('memcached');
 
 var filename    = process.argv[2];
 var spinner     = '┤┘┴└├┌┬┐';
@@ -42,7 +42,7 @@ if (filename) {
     }
 }
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211 });
+var client      = new moxi(['localhost:11211']);
 
 // Hide cursor as well
 process.stdout.write('File: ' + filename + ' ');

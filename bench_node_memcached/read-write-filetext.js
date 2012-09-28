@@ -1,48 +1,26 @@
 var fs     = require('fs'),
     util   = require('util'),
-    moxi   = require('../index.js');
+    moxi   = require('memcached');
 
 var filename    = process.argv[2];
 var spinner     = '┤┘┴└├┌┬┐';
-var count       = process.argv[3] || 50000;
+var count       = process.argv[3] || 10000;
 var ts          = 0;
 var incr        = 0;
 
-// Data from: http://json.org/example.html
-var data        = {
-    "glossary": {
-        "title": "example glossary",
-        "GlossDiv": {
-            "title": "S",
-            "GlossList": {
-                "GlossEntry": {
-                    "ID": "SGML",
-                    "SortAs": "SGML",
-                    "GlossTerm": "Standard Generalized Markup Language",
-                    "Acronym": "SGML",
-                    "Abbrev": "ISO 8879:1986",
-                    "GlossDef": {
-                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
-                        "GlossSeeAlso": ["GML", "XML"]
-                    },
-                    "GlossSee": "markup"
-                }
-            }
-        }
-    }
-};
-
-// We allow JSON file if necessary
-if (filename) {
-    try {
-        var data   = JSON.parse(fs.readFileSync(filename));
-    } catch (e) {
-        console.error('Could not load specified data file:', e);
-        process.exit(1);
-    }
+if (!filename) {
+    console.error('Please specify a data file to load');
+    process.exit(1);
 }
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211 });
+try {
+    var data   = fs.readFileSync(filename).toString();
+} catch (e) {
+    console.error('Could not load specified data file:', e);
+    process.exit(1);
+}
+
+var client      = new moxi(['localhost:11211']);
 
 // Hide cursor as well
 process.stdout.write('File: ' + filename + ' ');

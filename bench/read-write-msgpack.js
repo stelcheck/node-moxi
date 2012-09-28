@@ -42,7 +42,7 @@ if (filename) {
     }
 }
 
-var client      = new moxi.moxi({'host' : 'localhost', port : 11211 });
+var client      = new moxi.moxi({'host' : 'localhost', port : 11211, msgpack: true });
 
 // Hide cursor as well
 process.stdout.write('File: ' + filename + ' ');

@@ -3,6 +3,7 @@ require('buffertools');
 var net      = require('net'),
     util     = require('util'),
     events   = require('events'),
+    msgpack  = require('msgpack'),
     deadpool = require('generic-pool');
 
 var moxi = function (config) {
@@ -11,6 +12,8 @@ var moxi = function (config) {
     var pools    = moxi.pools;
     var pool     = moxi.pools[poolName];
     var configLog = config.log;
+
+    this.config = config;
 
     if (!pool) {
 
@@ -117,6 +120,7 @@ for (var key in moxi.prototype.expects) {
 
 // Flags, taken out of node-memcached
 moxi.prototype.FLAGS = {
+    'MSGPACK'   : 3<<1,
     'BINARY'    : 2<<1,
     'JSON'      : 1<<1
 };
@@ -261,7 +265,9 @@ moxi.prototype._call = function (action, data, expect, cb) {
             // Note: we assume that the buffer size will always be bigger than a first line response
             if (!this.firstLineChecked) {
 
-                // If we are doing increment/
+                // If we are doing increment,
+                // set the value, but keep going in case we have an
+                // error situation
                 if (command === 'incr' || command === 'decr') {
                     transmissionCompleted = true;
                     this.returnData = data.slice(0, dataSize - 2);
@@ -304,16 +310,14 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 if (this.currentKey) {
                     currentData  = this.returnData[this.currentKey];
                     leftOverData = data.slice(0, this.leftToReceive - 2);
-                    this.returnData[this.currentKey] = Buffer.concat([currentData, leftOverData], currentData.length + leftOverData.length);
-                    this.returnData[this.currentKey] = that._unserialize(this.returnData[this.currentKey], this.currentMetaData);
-                    delete this.currentKey;
+                    currentData  = Buffer.concat([currentData, leftOverData], currentData.length + leftOverData.length);
+                    this.returnData[this.currentKey] = that._unserialize(currentData, this.currentMetaData);
                 }
 
                 var buffer           = data.slice(this.leftToReceive);
                 var bufferSize       = buffer.length;
 
-                buffer.copy(this.callBuffer, 0, 0, 5);
-                var callBuffer      = this.callBuffer;
+                var callBuffer       = buffer.slice(0, 5);
 
                 var dataLength       = 0;
                 var metaData         = null;
@@ -327,10 +331,10 @@ moxi.prototype._call = function (action, data, expect, cb) {
                     transmissionCompleted = true;
                 }
                 else {
-                    while (callBuffer.equals('VALUE')) {
+                    while (callBuffer.equals(that.bufferCode.VALUE)) {
 
-                        var pos             = buffer.indexOf('\r');
-                        metaData        = buffer.slice(6, pos).toString().split(' ');
+                        var pos         = buffer.indexOf('\r');
+                        metaData        = buffer.slice(6, pos).toString('binary').split(' ');
                         dataLength      = parseInt(metaData[2]);
                         metaDataLength  = pos + 2;
                         this.currentKey = metaData[0];
@@ -353,7 +357,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         this.returnData[this.currentKey] = that._unserialize(buffer.slice(metaDataLength, metaDataLength + dataLength), metaData);
                         buffer       = buffer.slice(metaDataLength + dataLength + 2);
                         bufferSize   = buffer.length;
-                        buffer.copy(callBuffer, 0, 0, 5);
+                        callBuffer   = buffer.slice(0, 5);
 
                         // Once the data is consumed, we should have either VALUE or END
 
@@ -363,13 +367,15 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         if (bufferSize === 0) {
                             return;
                         }
+
                         // If VALUE, continue the loop
-                        else if (callBuffer.equals(that.bufferCode.VALUE)) {
+                        if (callBuffer.equals(that.bufferCode.VALUE)) {
                             that.pool.verbose('data end, receiving new value for action', action);
                             continue;
                         }
+
                         // If END, transmission is completed correctly, were done
-                        else if (callBuffer.equals(that.bufferCode['END\r\n'])) {
+                        if (callBuffer.equals(that.bufferCode['END\r\n'])) {
                             that.pool[expect.END]('action', action, 'returned END');
                             transmissionCompleted = true;
                             break;
@@ -409,7 +415,8 @@ moxi.prototype._call = function (action, data, expect, cb) {
 
         // If data, fire away data
         if (data) {
-            client.write(data + '\r\n', 'binary');
+            client.write(data, 'binary');
+            client.write('\r\n', 'binary');
         }
     });
 };
@@ -422,30 +429,43 @@ moxi.prototype._serialize = function (data) {
 
     if (Buffer.isBuffer(data)) {
         flag = this.FLAGS.BINARY;
-        data = data.toString('binary');
+        length = data.length;
     } else if (dataType !== 'string' && dataType !== 'number') {
-        flag = this.FLAGS.JSON;
-        data = JSON.stringify(data);
+        if (this.config.msgpack) {
+            flag    = this.FLAGS.MSGPACK;
+            data    = msgpack.pack(data);
+            length  = data.length;
+        }
+        else {
+            flag    = this.FLAGS.JSON;
+            data    = JSON.stringify(data);
+        }
     } else {
         data = data.toString();
     }
 
-    return [data, flag, Buffer.byteLength(data, 'binary')];
+    if (length === 0) {
+        length = Buffer.byteLength(data, 'binary');
+    }
+
+    return [data, flag, length];
 };
 
 moxi.prototype._unserialize = function (data, meta) {
     switch (parseInt(meta[1])) {
+    case this.FLAGS.MSGPACK:
+        return msgpack.unpack(data);
+        break;
     case this.FLAGS.JSON:
-        data = JSON.parse(data);
+        return JSON.parse(data);
         break;
     case this.FLAGS.BINARY:
+        return data;
         break;
     default:
-        data = data.toString();
+        return data.toString();
         break;
     }
-
-    return data;
 };
 
 moxi.prototype._setLogging = function (pool, configLog) {
