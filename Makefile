@@ -25,6 +25,10 @@ lint:
 lint-all:
 	./scripts/lint-all.sh
 
+# target: bench, runs a benchmark with different files from data/
+benchmark:
+	./scripts/benchmark.sh
+
 # target: git-setup, Sets up git hooks.
 git-setup:
 	./scripts/git-setup.sh
