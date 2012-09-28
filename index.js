@@ -1,3 +1,5 @@
+require('buffertools');
+
 var net      = require('net'),
     util     = require('util'),
     events   = require('events'),
@@ -94,6 +96,25 @@ moxi.prototype.expects = {
         'OK' : 'warn'
     }
 };
+
+moxi.prototype.bufferCode = {
+    'VALUE' : new Buffer('VALUE'),
+};
+// These are errors which can apply to
+// everyone; we add them to the expect object
+
+
+for(var key in moxi.prototype.expects) {
+    moxi.prototype.expects[key].ERROR           = 'error';
+    moxi.prototype.expects[key].CLIENT_ERROR    = 'error';
+    moxi.prototype.expects[key].SERVER_ERROR    = 'error'
+
+    for (var subkey in moxi.prototype.expects[key]) {
+        moxi.prototype.bufferCode[subkey] = new Buffer(subkey);
+        moxi.prototype.bufferCode[subkey + '\r\n'] = new Buffer(subkey + '\r\n');
+    }
+};
+
 
 // Flags, taken out of node-memcached
 moxi.prototype.FLAGS = {
@@ -240,6 +261,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
         // Set some client metadata for this
         // current call
         client.receivedData     = new Buffer(0);
+        client.callBuffer       = new Buffer(5);
         client.leftToReceive    = 0;
         client.firstLineChecked = false;
         client.remainderBuffer  = null; // Buffer object
@@ -249,7 +271,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
 
             // Appending to buffer, setting the data which
             // we have to parse on this round
-            this.receivedData = Buffer.concat([this.receivedData, data]);
+            this.receivedData = Buffer.concat([this.receivedData, data], data.length + this.receivedData.length);
 
             if (this.remainderBuffer) {
                 data = Buffer.concat([this.remainderBuffer, data], data.length + this.remainderBuffer.length);
@@ -282,21 +304,18 @@ moxi.prototype._call = function (action, data, expect, cb) {
                     transmissionCompleted = true;
                 }
 
-                // These are errors which can apply to
-                // everyone; we add them to the expect object
-                expect.ERROR = expect.CLIENT_ERROR = expect.SERVER_ERROR = 'error'
-
                 // Check for expected end-of-command
                 // Depending on the command type
                 // Note that we expect a get or multiget returning no
                 // data to pass by here
                 for (var message in expect) {
-                    if (receivedData.toString(null, 0, message.length) === message) {
+                    if (receivedData.length > message.length && receivedData.slice(0, message.length).equals(that.bufferCode[message])) {
 
                         that.pool[expect[message]]('action', action, 'returned', message);
 
                         if (expect[message] === 'error') {
                             err = { message: 'Error / Invalid output code', code : message };
+                            console.log(receivedData.toString(), "::", message)
                         }
 
                         transmissionCompleted = true;
@@ -315,7 +334,9 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 // you should be able to receive buffer instead of string
                 var buffer           = data.slice(this.leftToReceive);
                 var bufferSize       = buffer.length;
-                var stringBuffer     = buffer.slice(0, 5).toString();
+
+                buffer.copy(this.callBuffer, 0, 0, 5);
+                var callBuffer      = this.callBuffer;
 
                 var dataLength       = 0;
                 var metaDataLength   = 0;
@@ -323,31 +344,14 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 // If the last message is END, we have
                 // no other value to consume
                 // and we dont loop.
-                if (stringBuffer === 'END\r\n') {
+                if (callBuffer.equals(that.bufferCode['END\r\n'])) {
                     that.pool[expect.END]('action', action, 'returned END');
                     transmissionCompleted = true;
                 }
                 else {
-                    // if stringBuffer.substr(0,5) === 'VALUE'
-                    // Extract metadata
-                    // extracted = buffer.toString();
-                    //   .substr(2, indexOf('\r\n')).split(' ');
-                    // pop()
-                    // while (buffer.toString(null, 0, 7))
-                    while (stringBuffer === 'VALUE') {
+                    while (callBuffer.equals('VALUE')) {
 
-                        var pos = false,
-                            incr = 6; // We jump the value statement
-
-                        while (!pos) {
-                            if (buffer[incr] === '\r'.charCodeAt()) {
-                                pos = incr;
-                                break;
-                            }
-
-                            incr++;
-                        }
-
+                        pos             = buffer.indexOf('\r');
                         metaData        = buffer.slice(6,pos).toString().split(' ');
                         dataLength      = parseInt(metaData[2]);
                         metaDataLength  = pos+2;
@@ -367,7 +371,7 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         // Consume the data
                         buffer       = buffer.slice(metaDataLength + dataLength + 2);
                         bufferSize   = buffer.length;
-                        stringBuffer = buffer.slice(0, 5).toString();
+                        buffer.copy(callBuffer, 0, 0, 5);
 
                         // Once the data is consumed, we should have either VALUE or END
 
@@ -378,12 +382,12 @@ moxi.prototype._call = function (action, data, expect, cb) {
                             return;
                         }
                         // If VALUE, continue the loop
-                        else if (stringBuffer === 'VALUE') {
+                        else if (callBuffer.equals(that.bufferCode.VALUE)) {
                             that.pool.verbose('data end, receiving new value for action', action);
                             continue;
                         }
                         // If END, transmission is completed correctly, were done
-                        else if (stringBuffer === 'END\r\n') {
+                        else if (callBuffer.equals(that.bufferCode['END\r\n'])) {
                             that.pool[expect.END]('action', action, 'returned END');
                             transmissionCompleted = true;
                             break;
