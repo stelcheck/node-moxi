@@ -457,7 +457,7 @@ moxi.prototype._unserialize = function (data, meta) {
         return msgpack.unpack(data);
         break;
     case this.FLAGS.JSON:
-        return JSON.parse(data);
+        return JSON.parse(data.toString('binary'));
         break;
     case this.FLAGS.BINARY:
         return data;

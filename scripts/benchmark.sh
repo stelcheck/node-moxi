@@ -39,8 +39,13 @@ if (( $string || $all )); then
     echo "";
     echo "==== Benchmarking String data ====" | yellow;
     echo "";
+    echo "-- read" | grey;
     for file in $(ls ./data/ | sort -n | grep ".dat\$"); do
         node ./bench/read-write-filetext.js ./data/${file};
+    done
+    echo "-- write" | blue;
+    for file in $(ls ./data/ | sort -n | grep ".dat\$"); do
+        node ./bench/write-filetext.js ./data/${file};
     done
     echo "";
 fi;
@@ -49,8 +54,13 @@ if (( $json || $all )); then
     echo "";
     echo "==== Benchmarking JSON data ====" | green;
     echo "";
+    echo "-- read" | grey;
     for file in $(du -a ./data/| sort -n | grep "json\$" | cut -f2); do
         node ./bench/read-write-json.js ${file};
+    done
+    echo "-- write" | blue;
+    for file in $(du -a ./data/| sort -n | grep "json\$" | cut -f2); do
+        node ./bench/write-json.js ${file};
     done
     echo "";
 fi;
@@ -59,8 +69,13 @@ if (( $binary || $all )); then
     echo "";
     echo "==== Benchmarking Binary data ====" | blue | bold
     echo "";
+    echo "-- read" | grey;
     for file in $(ls ./data/ | sort -n | grep ".dat\$"); do
         node ./bench/read-write-filedata.js ./data/${file};
+    done
+    echo "-- write" | blue;
+    for file in $(ls ./data/ | sort -n | grep ".dat\$"); do
+        node ./bench/write-filedata.js ./data/${file};
     done
     echo "";
 fi;
