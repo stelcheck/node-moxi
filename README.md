@@ -7,7 +7,7 @@ An alternative for connecting to Couchbase through Moxi, based on node-pool
 Documentation
 --------------
 
-Coming soon.
+Coming soon. API-compatible with node-memcached (please check the test iles for configuration)
 
 License
 --------
