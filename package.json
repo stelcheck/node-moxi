@@ -26,6 +26,6 @@
     },
     "private": true,
     "scripts": {
-        "test": "NODE_PATH=./ node_modules/.bin/vows ./tests/* --spec"
+        "test": "node_modules/.bin/vows ./test/* --spec"
     }
 }
