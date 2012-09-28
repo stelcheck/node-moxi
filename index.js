@@ -315,20 +315,15 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 // you should be able to receive buffer instead of string
                 var buffer           = data.slice(this.leftToReceive);
                 var bufferSize       = buffer.length;
+                var stringBuffer     = buffer.slice(0, 5).toString();
 
-                // fullStringBuffer
-                var fullStringBuffer = buffer.toString();
-                var stringBuffer     = buffer.slice(0, 7).toString();
-
-                var pattern          = /\r?\n?VALUE [^\s]+ [0-9]+ ([0-9]+)\r\n/g;
                 var dataLength       = 0;
                 var metaDataLength   = 0;
-                var extracted        = [];
 
                 // If the last message is END, we have
                 // no other value to consume
                 // and we dont loop.
-                if (stringBuffer === '\r\nEND\r\n') {
+                if (stringBuffer === 'END\r\n') {
                     that.pool[expect.END]('action', action, 'returned END');
                     transmissionCompleted = true;
                 }
@@ -339,15 +334,28 @@ moxi.prototype._call = function (action, data, expect, cb) {
                     //   .substr(2, indexOf('\r\n')).split(' ');
                     // pop()
                     // while (buffer.toString(null, 0, 7))
-                    while (extracted = pattern.exec(fullStringBuffer)) {
+                    while (stringBuffer === 'VALUE') {
 
-                        dataLength      = parseInt(extracted[1]);
-                        metaDataLength  = Buffer.byteLength(extracted[0]);
+                        var pos = false,
+                            incr = 6; // We jump the value statement
+
+                        while (!pos) {
+                            if (buffer[incr] === '\r'.charCodeAt()) {
+                                pos = incr;
+                                break;
+                            }
+
+                            incr++;
+                        }
+
+                        metaData        = buffer.slice(6,pos).toString().split(' ');
+                        dataLength      = parseInt(metaData[2]);
+                        metaDataLength  = pos+2;
 
                         // Here we deal with not completely received data
                         // In this case, we
                         if (dataLength + metaDataLength > bufferSize) {
-                            this.leftToReceive = dataLength + metaDataLength - bufferSize;
+                            this.leftToReceive = dataLength + metaDataLength - bufferSize + 2;
                             that.pool.verbose(dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
                             return;
                         }
@@ -357,9 +365,9 @@ moxi.prototype._call = function (action, data, expect, cb) {
                         // we either hit END or a data chunk larger than the expected dataSize
 
                         // Consume the data
-                        buffer       = buffer.slice(metaDataLength + dataLength);
+                        buffer       = buffer.slice(metaDataLength + dataLength + 2);
                         bufferSize   = buffer.length;
-                        stringBuffer = buffer.slice(0, 7).toString();
+                        stringBuffer = buffer.slice(0, 5).toString();
 
                         // Once the data is consumed, we should have either VALUE or END
 
@@ -370,18 +378,12 @@ moxi.prototype._call = function (action, data, expect, cb) {
                             return;
                         }
                         // If VALUE, continue the loop
-                        else if (stringBuffer === '\r\nVALUE') {
-                            // Extract metadata
-                            // extracted = buffer.toString();
-                            //   .substr(2, indexOf('\r\n')).split(' ');
-                            // pop()
-                            bufferSize = buffer.length;
-                            stringBuffer = buffer.slice(0,7).toString();
+                        else if (stringBuffer === 'VALUE') {
                             that.pool.verbose('data end, receiving new value for action', action);
                             continue;
                         }
                         // If END, transmission is completed correctly, were done
-                        else if (stringBuffer === '\r\nEND\r\n') {
+                        else if (stringBuffer === 'END\r\n') {
                             that.pool[expect.END]('action', action, 'returned END');
                             transmissionCompleted = true;
                             break;
