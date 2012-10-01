@@ -10,16 +10,16 @@ vows.describe('Store + MultiGet').addBatch({
         'topic': function () {
             async.parallel([
                 function (cb) {
-                    client.set('test41', {'test41value':1, 'a':'string'}, 5, cb);
+                    client.set('test41', {'test41value': 1, 'a':  'string'}, 5, cb);
                 },
                 function (cb) {
-                    client.set('test42', {'test42value':1, 'a':'string'}, 5, cb);
+                    client.set('test42', {'test42value': 1, 'a':  'string'}, 5, cb);
                 },
                 function (cb) {
-                    client.set('test43', {'test43value':1, 'a':'string'}, 5, cb);
+                    client.set('test43', {'test43value': 1, 'a':  'string'}, 5, cb);
                 },
                 function (cb) {
-                    client.set('test44', {'test44value':1, 'a':'string'}, 5, cb);
+                    client.set('test44', {'test44value': 1, 'a':  'string'}, 5, cb);
                 }
             ], this.callback);
         },
@@ -32,10 +32,10 @@ vows.describe('Store + MultiGet').addBatch({
             },
             'returns "test1value"' : function (data) {
                 assert.deepEqual(data,  {
-                    'test41': {'test41value':1, 'a':'string'},
-                    'test42': {'test42value':1, 'a':'string'},
-                    'test43': {'test43value':1, 'a':'string'},
-                    'test44': {'test44value':1, 'a':'string'}
+                    'test41': {'test41value': 1, 'a':  'string'},
+                    'test42': {'test42value': 1, 'a':  'string'},
+                    'test43': {'test43value': 1, 'a':  'string'},
+                    'test44': {'test44value': 1, 'a':  'string'}
                 });
             },
             'delete "test41-44 values"' : {

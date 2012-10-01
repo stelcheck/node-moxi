@@ -28,9 +28,11 @@ vows.describe('Store').addBatch({
                 },
                 'Get "test15" again' : {
                     'topic': function () {
+                        console.log('ok');
                         client.get("test15", this.callback);
                     },
                     'returns "STORED"' : function (data) {
+                        console.log('ok');
                         assert.equal(data, 'test15othervalue');
                     },
                     'delete "test15"' : {

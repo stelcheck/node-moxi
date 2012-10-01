@@ -3,7 +3,6 @@ var fs     = require('fs'),
     moxi   = require('memcached');
 
 var filename    = process.argv[2];
-var spinner     = '┤┘┴└├┌┬┐';
 var count       = process.argv[3] || 10000;
 var ts          = 0;
 var incr        = 0;
@@ -22,18 +21,9 @@ try {
 
 var client      = new moxi(['localhost:11211']);
 
-// Hide cursor as well
 process.stdout.write('File: ' + filename + ' ');
-process.stdout.write(' \x1B[?25l');
 
-process.on('exit', function () {
-    process.stdout.write('\x1B[?25h');
-});
-
-
-// Show cursor on exit and so on
 process.on('SIGINT', function () {
-    process.stdout.write('\x1B[?25h');
     console.log('\bCount', util.format('%d', incr), 'Test completed in', util.format('%s', (new Date().getTime()) - ts), 'ms');
     process.exit();
 });
@@ -49,8 +39,7 @@ client.set(filename, data, 0, function (err, data) {
     incr++;
 
     if (incr < count) {
-        process.stdout.write('\b' + spinner[incr % spinner.length]);
-        return client.get(filename, arguments.callee);
+        return client.set(filename, data, 0, arguments.callee);
     }
 
     else {

@@ -4,6 +4,7 @@ var net      = require('net'),
     util     = require('util'),
     events   = require('events'),
     msgpack  = require('msgpack'),
+    processor= require('./lib/processor'),
     deadpool = require('generic-pool');
 
 var moxi = function (config) {
@@ -12,6 +13,7 @@ var moxi = function (config) {
     var pools    = moxi.pools;
     var pool     = moxi.pools[poolName];
     var configLog = config.log;
+    var that     = this;
 
     this.config = config;
 
@@ -21,7 +23,7 @@ var moxi = function (config) {
 
         config.create = function createConnection(callback) {
 
-            var client = net.createConnection(config.port, config.host);
+            var client          = net.createConnection(config.port, config.host);
 
             // On connect callback
             client.on('connect', function connect() {
@@ -53,7 +55,8 @@ var moxi = function (config) {
 
             client.setNoDelay(true);
 
-            client.pool = pool;
+            client.pool         = pool;
+            client.processor    = new processor.Processor(that, client);
         };
 
         // destroy the client on destroy
@@ -212,10 +215,7 @@ moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
 
 moxi.prototype._call = function (action, data, expect, cb) {
 
-    var that = this;
-    var command = action[0];
-
-    var actionStr = action.join(" ");
+    var actionStr = action.join(" "); // transform to buffer
 
     this.pool.acquire(function (err, client) {
 
@@ -223,200 +223,19 @@ moxi.prototype._call = function (action, data, expect, cb) {
             return cb(err, client);
         }
 
-        // Set some client metadata for this
-        // current call
-        client.callBuffer       = new Buffer(5);
-        client.leftToReceive    = 0;
-        client.firstLineChecked = false;
-        client.returnData       = {};
-        client.currentKey       = null;
-        client.remainderBuffer  = null; // Buffer object
+        client.processor.set(action, expect, cb);
 
-        // Data reception
-        var onDataReceived = client.on('data', function onDataReceived(data) {
-
-            if (this.remainderBuffer) {
-                data = Buffer.concat([this.remainderBuffer, data], data.length + this.remainderBuffer.length);
-            }
-
-            // Variable definition
-            var dataSize                = data.length;
-            var transmissionCompleted   = false;
-            var err                     = false;
-            var leftToReceive           = this.leftToReceive;
-            var currentData             = '';
-            var leftOverData           = '';
-
-            // Don't bother checking the outcome, we still have data to receive
-            // data has been stacked, let's just move along
-
-            if (leftToReceive - dataSize > 0) {
-                currentData = this.returnData[this.currentKey];
-                this.returnData[this.currentKey] = Buffer.concat([currentData, data], currentData.length + dataSize);
-                leftToReceive = this.leftToReceive -= dataSize;
-                that.pool.verbose(dataSize + ' received ::', this.leftToReceive + ' data left to receive for action', action);
-                return;
-            }
-
-            // Here we deal with the first line (any return but VALUE)
-            // We deal with errors, increment/decrement returns and
-            // return messages which are defined in the list of expected
-            // return messages
-            // Note: we assume that the buffer size will always be bigger than a first line response
-            if (!this.firstLineChecked) {
-
-                // If we are doing increment,
-                // set the value, but keep going in case we have an
-                // error situation
-                if (command === 'incr' || command === 'decr') {
-                    transmissionCompleted = true;
-                    this.returnData = data.slice(0, dataSize - 2);
-                }
-
-                // Check for expected end-of-command
-                // Depending on the command type
-                // Note that we expect a get or multiget returning no
-                // data to pass by here
-                for (var message in expect) {
-                    if (data.length > message.length && data.slice(0, message.length).equals(that.bufferCode[message])) {
-
-                        that.pool[expect[message]]('action', action, 'returned', message);
-
-                        if (expect[message] === 'error') {
-                            err = { message: data.toString(), code : message };
-                        }
-
-                        if (message === 'END') {
-                            this.returnData = {};
-                        }
-                        else {
-                            this.returnData = message;
-                        }
-
-                        transmissionCompleted = true;
-                    }
-                }
-
-                // No need to check the first line again
-                this.firstLineChecked = true;
-            }
-
-            // We have remaining data to consume;
-            // we are getting more data, and have done a get. Lets
-            // parse the data we get
-            if (!transmissionCompleted) {
-
-                // you should be able to receive buffer instead of string
-                if (this.currentKey) {
-                    currentData  = this.returnData[this.currentKey];
-                    leftOverData = data.slice(0, this.leftToReceive - 2);
-                    currentData  = Buffer.concat([currentData, leftOverData], currentData.length + leftOverData.length);
-                    this.returnData[this.currentKey] = that._unserialize(currentData, this.currentMetaData);
-                }
-
-                var buffer           = data.slice(this.leftToReceive);
-                var bufferSize       = buffer.length;
-
-                var callBuffer       = buffer.slice(0, 5);
-
-                var dataLength       = 0;
-                var metaData         = null;
-                var metaDataLength   = 0;
-
-                // If the last message is END, we have
-                // no other value to consume
-                // and we dont loop.
-                if (callBuffer.equals(that.bufferCode['END\r\n'])) {
-                    that.pool[expect.END]('action', action, 'returned END');
-                    transmissionCompleted = true;
-                }
-                else {
-                    while (callBuffer.equals(that.bufferCode.VALUE)) {
-
-                        var pos         = buffer.indexOf('\r');
-                        metaData        = buffer.slice(6, pos).toString('binary').split(' ');
-                        dataLength      = parseInt(metaData[2]);
-                        metaDataLength  = pos + 2;
-                        this.currentKey = metaData[0];
-
-                        // Here we deal with not completely received data
-                        // In this case, we
-                        if (dataLength + metaDataLength > bufferSize) {
-                            this.returnData[this.currentKey] = buffer.slice(metaDataLength);
-                            this.currentMetaData = metaData;
-                            this.leftToReceive = dataLength + metaDataLength - bufferSize + 2;
-                            that.pool.verbose(dataLength + ' data size ::', this.leftToReceive + ' data left to receive, waiting for the rest...', action);
-                            return;
-                        }
-
-                        // Here we deal with small reads which should come in all at once.
-                        // In this case, the while-loop should basically consume all data until
-                        // we either hit END or a data chunk larger than the expected dataSize
-
-                        // Consume the data
-                        this.returnData[this.currentKey] = that._unserialize(buffer.slice(metaDataLength, metaDataLength + dataLength), metaData);
-                        buffer       = buffer.slice(metaDataLength + dataLength + 2);
-                        bufferSize   = buffer.length;
-                        callBuffer   = buffer.slice(0, 5);
-
-                        // Once the data is consumed, we should have either VALUE or END
-
-                        // If the remainder of the buffer matched exactly
-                        // the expected data length, we break out. We
-                        // expect to receive more data on another batch
-                        if (bufferSize === 0) {
-                            return;
-                        }
-
-                        // If VALUE, continue the loop
-                        if (callBuffer.equals(that.bufferCode.VALUE)) {
-                            that.pool.verbose('data end, receiving new value for action', action);
-                            continue;
-                        }
-
-                        // If END, transmission is completed correctly, were done
-                        if (callBuffer.equals(that.bufferCode['END\r\n'])) {
-                            that.pool[expect.END]('action', action, 'returned END');
-                            transmissionCompleted = true;
-                            break;
-                        }
-                    }
-
-                    // This is for cases where we have fragment
-                    // VALUE statement comming in; we pass them on
-                    // to the next data reception
-                    this.remainderBuffer = buffer;
-                }
-            }
-
-            // Once we get an end of transmission message, we release the connection
-            // and return the data (and error if applicable)
-            if (transmissionCompleted) {
-                // removing two chars \r\n at the end
-                // removing listener on the connection
-                // releasing the connection back in the pool
-
-                this.removeListener('data', onDataReceived);
-
-                var ret = this.returnData;
-                delete this.returnData;
-
-                that.pool.release(this);
-
-                if (cb) {
-                    cb(err, ret);
-                }
-
-            }
+        client.on('data', function (data) {
+            client.processor.onDataReceived(data);
         });
 
         // Fire away call
-        client.write(actionStr + '\r\n', 'binary');
+        client.write(actionStr + '\r\n');
 
         // If data, fire away data
         if (data) {
-            client.write(data, 'binary');
-            client.write('\r\n', 'binary');
+            client.write(data);
+            client.write('\r\n');
         }
     });
 };
@@ -445,7 +264,7 @@ moxi.prototype._serialize = function (data) {
     }
 
     if (length === 0) {
-        length = Buffer.byteLength(data, 'binary');
+        length = Buffer.byteLength(data);
     }
 
     return [data, flag, length];
@@ -455,16 +274,12 @@ moxi.prototype._unserialize = function (data, meta) {
     switch (parseInt(meta[1])) {
     case this.FLAGS.MSGPACK:
         return msgpack.unpack(data);
-        break;
     case this.FLAGS.JSON:
         return JSON.parse(data.toString('binary'));
-        break;
     case this.FLAGS.BINARY:
         return data;
-        break;
     default:
         return data.toString();
-        break;
     }
 };
 
