@@ -9,13 +9,13 @@ var net      = require('net'),
 
 var moxi = function (config) {
 
-    var poolName = [config.host, config.port].join(':');
-    var pools    = moxi.pools;
-    var pool     = moxi.pools[poolName];
-    var configLog = config.log;
-    var that     = this;
+    var poolName    = [config.host, config.port].join(':');
+    var pools       = moxi.pools;
+    var pool        = moxi.pools[poolName];
+    var configLog   = config.log;
+    var that        = this;
 
-    this.config = config;
+    this.config     = config;
 
     if (!pool) {
 
@@ -213,31 +213,65 @@ moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
     return this._call('flush_all', false, this.expects.flush, cb);
 };
 
+moxi.prototype.bundle = function (cb) {
+    var copy = new moxi(this.config);
+    copy.pool.acquire(function (err, client) {
+        copy.bundleMode = client;
+        return cb(err, copy);
+    });
+};
+
+moxi.prototype.release = function () {
+    if (!this.bundleMode) {
+        return new Error('Bundle mode was not in operation');
+    }
+
+    this.pool.release(this.bundleMode);
+    this.bundleMode = null;
+};
+
 moxi.prototype._call = function (action, data, expect, cb) {
 
-    var actionStr = action.join(" "); // transform to buffer
+    var that = this;
 
-    this.pool.acquire(function (err, client) {
+    if (this.bundleMode) {
+        that._transmit(this.bundleMode, action, data, expect, cb);
+    }
+    else {
+        this.pool.acquire(function (err, client) {
+            if (err) {
+                return cb(err, client);
+            }
 
-        if (err) {
-            return cb(err, client);
-        }
-
-        client.processor.set(action, expect, cb);
-
-        client.on('data', function (data) {
-            client.processor.onDataReceived(data);
+            that._transmit(client, action, data, expect, cb)
         });
+    }
+};
 
-        // Fire away call
-        client.write(actionStr + '\r\n');
+moxi.prototype._transmit = function (client, action, data, expect, cb) {
 
-        // If data, fire away data
-        if (data) {
-            client.write(data);
-            client.write('\r\n');
+    var actionStr = action.join(" "); // transform to buffer
+    var that      = this;
+
+    client.processor.set(action, expect, function(err, data) {
+        cb(err, data);
+        if (!that.bundleMode) {
+            that.pool.release(client);
         }
     });
+
+    client.on('data', function (data) {
+        client.processor.onDataReceived(data);
+    });
+
+    // Fire away call
+    client.write(actionStr + '\r\n');
+
+    // If data, fire away data
+    if (data) {
+        client.write(data);
+        client.write('\r\n');
+    }
 };
 
 moxi.prototype._serialize = function (data) {
