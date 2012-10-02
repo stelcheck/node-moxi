@@ -9,7 +9,7 @@ var imageData   = fs.readFileSync('./data/sean.jpg');
 var textData    = fs.readFileSync('./data/512k.txt');
 
 vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
-    'Set "test12x" to large data sets' : {
+    'Set "test12[1-4]" to different sized data' : {
         'topic': function () {
             async.parallel([
                 function (cb) {
@@ -29,17 +29,17 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
         'returns "STORED"' : function (data) {
             assert.deepEqual(data,  [ 'STORED', 'STORED', 'STORED', 'STORED' ]);
         },
-        'read the value of "test12"' : {
+        'read previously set values' : {
             'topic': function () {
                 client.getMulti(['test121', 'test122', 'test123', 'test124'], this.callback);
             },
-            'returns "test1value"' : function (data) {
+            'returns previously set values' : function (data) {
                 assert.deepEqual(data.test121, textData);
                 assert.equal(data.test122, 'bravo');
                 assert.equal(data.test123, 'charlie');
                 assert.deepEqual(data.test124, imageData);
             },
-            'delete "test121-44 values"' : {
+            'delete "test12[1-4] values"' : {
                 'topic': function () {
                     async.parallel([
                         function (cb) {
@@ -56,10 +56,10 @@ vows.describe('Store an Image and Large Text Data (512k data block)').addBatch({
                         }
                     ], this.callback);
                 },
-                'returns "test1value"' : function (data) {
+                'returns "DELETED"' : function (data) {
                     assert.deepEqual(data,  [ 'DELETED', 'DELETED', 'DELETED', 'DELETED' ]);
                 },
-                'read the value of "test1", expect empty' : {
+                'read the value of "test12[1-4]"' : {
                     'topic' : function () {
                         client.getMulti(['test121', 'test122', 'test123', 'test124'], this.callback);
                     },

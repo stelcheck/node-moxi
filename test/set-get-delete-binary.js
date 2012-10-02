@@ -9,28 +9,28 @@ var imageData   = fs.readFileSync('./data/sean.jpg');
 vows.describe('Store Binary').addBatch({
     'Set "test3" to "test3value"' : {
         'topic': function () {
-            client.set("test3", imageData, 3, this.callback);
+            client.set('test3', imageData, 3, this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.equal(data, 'STORED');
         },
         'read the value of "test3"' : {
             'topic': function () {
-                client.get("test3", this.callback);
+                client.get('test3', this.callback);
             },
-            'returns "test3value"' : function (data) {
+            'returns the binary data of "./data/sean.jpg"' : function (data) {
                 assert.deepEqual(data, imageData);
             },
             'delete "test3"' : {
                 'topic': function () {
-                    client.del("test3", this.callback);
+                    client.del('test3', this.callback);
                 },
-                'returns "test3value"' : function (data) {
+                'returns "DELETED"' : function (data) {
                     assert.equal(data, 'DELETED');
                 },
                 'read the value of "test3", expect empty' : {
                     'topic' : function () {
-                        client.get("test3", this.callback);
+                        client.get('test3', this.callback);
                     },
                     'returns "test3value" as empty' : function (data) {
                         assert.equal(data, '');

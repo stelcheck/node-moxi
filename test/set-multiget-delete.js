@@ -6,61 +6,61 @@ var vows    = require('vows'),
 var client = new moxi.moxi({'host' : 'localhost', port : 11211 });
 
 vows.describe('Store + MultiGet').addBatch({
-    'Set "test1" to "test1value"' : {
+    'Set "tes17" to "test1value"' : {
         'topic': function () {
             async.parallel([
                 function (cb) {
-                    client.set('test41', 'test41value', 5, cb);
+                    client.set('tes171', 'tes171value', 5, cb);
                 },
                 function (cb) {
-                    client.set('test42', 'test42value', 5, cb);
+                    client.set('tes172', 'tes172value', 5, cb);
                 },
                 function (cb) {
-                    client.set('test43', 'test43value', 5, cb);
+                    client.set('tes173', 'tes173value', 5, cb);
                 },
                 function (cb) {
-                    client.set('test44', 'test44value', 5, cb);
+                    client.set('tes174', 'tes174value', 5, cb);
                 }
             ], this.callback);
         },
         'returns "STORED"' : function (data) {
             assert.deepEqual(data,  [ 'STORED', 'STORED', 'STORED', 'STORED' ]);
         },
-        'read the value of "test1"' : {
+        'read the value of "tes17"' : {
             'topic': function () {
-                client.getMulti(['test41', 'test42', 'test43', 'test44'], this.callback);
+                client.getMulti(['tes171', 'tes172', 'tes173', 'tes174'], this.callback);
             },
-            'returns "test1value"' : function (data) {
+            'returns "tes17[1-4]value"' : function (data) {
                 assert.deepEqual(data,  {
-                    'test41': 'test41value',
-                    'test42': 'test42value',
-                    'test43': 'test43value',
-                    'test44': 'test44value'
+                    'tes171': 'tes171value',
+                    'tes172': 'tes172value',
+                    'tes173': 'tes173value',
+                    'tes174': 'tes174value'
                 });
             },
-            'delete "test41-44 values"' : {
+            'delete "tes17[1-4] values"' : {
                 'topic': function () {
                     async.parallel([
                         function (cb) {
-                            client.del('test41', cb);
+                            client.del('tes171', cb);
                         },
                         function (cb) {
-                            client.del('test42', cb);
+                            client.del('tes172', cb);
                         },
                         function (cb) {
-                            client.del('test43', cb);
+                            client.del('tes173', cb);
                         },
                         function (cb) {
-                            client.del('test44', cb);
+                            client.del('tes174', cb);
                         }
                     ], this.callback);
                 },
-                'returns "test1value"' : function (data) {
+                'returns "DELETED"' : function (data) {
                     assert.deepEqual(data,  [ 'DELETED', 'DELETED', 'DELETED', 'DELETED' ]);
                 },
-                'read the value of "test1", expect empty' : {
+                'read the value of "tes17[1-4]"' : {
                     'topic' : function () {
-                        client.getMulti(['test41', 'test42', 'test43', 'test44'], this.callback);
+                        client.getMulti(['tes171', 'tes172', 'tes173', 'tes174'], this.callback);
                     },
                     'returns all keys as empty' : function (data) {
                         assert.deepEqual(data,  {});

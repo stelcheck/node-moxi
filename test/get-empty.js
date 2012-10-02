@@ -9,7 +9,7 @@ vows.describe('Read empty').addBatch({
         'topic': function () {
             client.get("test", this.callback);
         },
-        'returns "test1value"': function (data) {
+        'returns empty string': function (data) {
             assert.equal(data, '');
         }
     }

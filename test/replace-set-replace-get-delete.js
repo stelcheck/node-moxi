@@ -31,7 +31,7 @@ vows.describe('Store').addBatch({
                         console.log('ok');
                         client.get("test15", this.callback);
                     },
-                    'returns "STORED"' : function (data) {
+                    'returns "ok"' : function (data) {
                         console.log('ok');
                         assert.equal(data, 'test15othervalue');
                     },
@@ -39,14 +39,14 @@ vows.describe('Store').addBatch({
                         'topic': function () {
                             client.del("test15", this.callback);
                         },
-                        'returns "test15value"' : function (data) {
+                        'returns "DELETED"' : function (data) {
                             assert.equal(data, 'DELETED');
                         },
-                        'read the value of "test15", expect empty' : {
+                        'read the value of "test15"' : {
                             'topic' : function () {
                                 client.get("test15", this.callback);
                             },
-                            'returns "test15value" as empty' : function (data) {
+                            'returns an empty string' : function (data) {
                                 assert.equal(data, '');
                             }
                         }

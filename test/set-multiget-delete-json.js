@@ -6,7 +6,7 @@ var vows    = require('vows'),
 var client = new moxi.moxi({'host' : 'localhost', port : 11211 });
 
 vows.describe('Store + MultiGet').addBatch({
-    'Set "test1" to "test1value"' : {
+    'Set "test4[1-4]" to "a"' : {
         'topic': function () {
             async.parallel([
                 function (cb) {
@@ -30,7 +30,7 @@ vows.describe('Store + MultiGet').addBatch({
             'topic': function () {
                 client.getMulti(['test41', 'test42', 'test43', 'test44'], this.callback);
             },
-            'returns "test1value"' : function (data) {
+            'returns "test4[1-4]" as "a"' : function (data) {
                 assert.deepEqual(data,  {
                     'test41': {'test41value': 1, 'a':  'string'},
                     'test42': {'test42value': 1, 'a':  'string'},
@@ -55,10 +55,10 @@ vows.describe('Store + MultiGet').addBatch({
                         }
                     ], this.callback);
                 },
-                'returns "test1value"' : function (data) {
+                'returns "DELETED"' : function (data) {
                     assert.deepEqual(data,  [ 'DELETED', 'DELETED', 'DELETED', 'DELETED' ]);
                 },
-                'read the value of "test1", expect empty' : {
+                'read the value of "test4[1-4]"' : {
                     'topic' : function () {
                         client.getMulti(['test41', 'test42', 'test43', 'test44'], this.callback);
                     },
