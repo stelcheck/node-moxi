@@ -20,7 +20,7 @@ vows.describe('Connection').addBatch({
         },
         'we get an error response on set': function (topic) {
             topic.set("test2", "value", 1, function (err) {
-                assert.equal(err.errno, 111);
+                assert.equal(err.errno, 'ECONNREFUSED');
             });
         }
     }

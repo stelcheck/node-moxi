@@ -39,21 +39,19 @@ var moxi = function (config) {
 
                 // If we get a connection refused, we call
                 // the callback with an error message
-                if (err.errno === 111) {
+                this.pool.error('Connection error: ', err);
+
+                console.log(err);
+                if (err.errno === 'ECONNREFUSED') {
                     return callback(err, null);
                 }
-
-                this.pool.error('ERROR: ', err);
-            });
-
-            // Will need further thinking
-            // on this one...
-            client.on('timeout', function handleError(err) {
-                this.pool.error('TIMEOUT: ', err);
-                this.pool.destroy(this);
+                else {
+                    throw err;
+                }
             });
 
             client.setNoDelay(true);
+            client.setTimeout(0);
 
             client.pool         = pool;
             client.processor    = new processor.Processor(that, client);
@@ -217,6 +215,7 @@ moxi.prototype.bundle = function (cb) {
     var copy = new moxi(this.config);
     copy.pool.acquire(function (err, client) {
         copy.bundleMode = client;
+
         return cb(err, copy);
     });
 };
