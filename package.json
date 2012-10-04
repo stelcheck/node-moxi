@@ -1,12 +1,12 @@
 {
     "name": "node-moxi",
     "description": "Node.js Connector to Moxi, the Membase/Couchbase proxy",
-    "version": "0.0.3",
-    "author": "Wizcorp K.K. <info@wizcorp.jp>",
+    "version": "0.0.4",
+    "author": "Marc Trudel-Belise <mt@wizcorp.jp>",
     "homepage": "http://www.wizcorp.jp",
     "bugs": {
-        "mail": "info@wizcorp.jp",
-        "url": "http://github.com/Wizcorp/Mithril/issues"
+        "mail": "mt@wizcorp.jp",
+        "url": "http://github.com/stelcheck/node-moxi/issues"
     },
     "engines": {
         "node": ">=0.8.1"
