@@ -1,19 +1,19 @@
 require('buffertools');
 
-var net      = require('net'),
-    util     = require('util'),
-    events   = require('events'),
-    msgpack  = require('msgpack'),
-    processor= require('./lib/processor'),
-    deadpool = require('generic-pool');
+var net       = require('net'),
+    util      = require('util'),
+    events    = require('events'),
+    msgpack   = require('msgpack'),
+    processor = require('./lib/processor'),
+    deadpool  = require('generic-pool');
 
 var moxi = function (config) {
 
-    var poolName    = [config.host, config.port].join(':');
-    var pools       = moxi.pools;
-    var pool        = moxi.pools[poolName];
-    var configLog   = config.log;
-    var that        = this;
+    var poolName    = [config.host, config.port].join(':'),
+        pools       = moxi.pools,
+        pool        = moxi.pools[poolName],
+        configLog   = config.log,
+        that        = this;
 
     this.config     = config;
 
@@ -128,9 +128,10 @@ moxi.prototype.FLAGS = {
 
 // On exit, drain pool
 process.on('exit', function drainAllPools() {
-    var pools = moxi.pools;
+    var pools = moxi.pools,
+        name  = '';
 
-    for (var name in pools) {
+    for (name in pools) {
         pools[name].destroyAllNow();
     }
 });
@@ -212,7 +213,8 @@ moxi.prototype.flush = moxi.prototype.flushAll = function (cb) {
 };
 
 moxi.prototype.bundle = function (cb) {
-    var copy = new moxi(this.config);
+    var copy = new exports.moxi(this.config);
+
     copy.pool.acquire(function (err, client) {
         copy.bundleMode = client;
 
@@ -242,18 +244,19 @@ moxi.prototype._call = function (action, data, expect, cb) {
                 return cb(err, client);
             }
 
-            that._transmit(client, action, data, expect, cb)
+            that._transmit(client, action, data, expect, cb);
         });
     }
 };
 
 moxi.prototype._transmit = function (client, action, data, expect, cb) {
 
-    var actionStr = action.join(" "); // transform to buffer
-    var that      = this;
+    var actionStr = action.join(" "), // transform to buffer
+        that      = this;
 
-    client.processor.set(action, expect, function(err, data) {
+    client.processor.set(action, expect, function (err, data) {
         cb(err, data);
+
         if (!that.bundleMode) {
             that.pool.release(client);
         }
@@ -275,9 +278,9 @@ moxi.prototype._transmit = function (client, action, data, expect, cb) {
 
 moxi.prototype._serialize = function (data) {
 
-    var flag = 0;
-    var length = 0;
-    var dataType = typeof data;
+    var flag = 0,
+        length = 0,
+        dataType = typeof data;
 
     if (Buffer.isBuffer(data)) {
         flag = this.FLAGS.BINARY;
@@ -304,7 +307,7 @@ moxi.prototype._serialize = function (data) {
 };
 
 moxi.prototype._unserialize = function (data, meta) {
-    switch (parseInt(meta[1])) {
+    switch (parseInt(meta[1], 10)) {
     case this.FLAGS.MSGPACK:
         return msgpack.unpack(data);
     case this.FLAGS.JSON:
@@ -318,16 +321,19 @@ moxi.prototype._unserialize = function (data, meta) {
 
 moxi.prototype._setLogging = function (pool, configLog) {
 
-    var logTypes = ['verbose', 'info', 'warn', 'error'];
-    var logType;
-    var logTypeDatatype;
-    var emptyFunction = function () { return true; };
+    var logTypes = new Array('verbose', 'info', 'warn', 'error'),
+        logType,
+        logTypeIndex,
+        logTypeDatatype,
+        emptyFunction = function () {
+            return true;
+        };
 
     if (typeof(configLog) === 'object') {
 
-        for (var i in logTypes) {
+        for (logTypeIndex in logTypes) {
 
-            logType = logTypes[i];
+            logType = logTypes[logTypeIndex];
             logTypeDatatype = typeof(configLog[logType]);
 
             if (logTypeDatatype === 'function') {

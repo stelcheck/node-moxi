@@ -55,7 +55,7 @@ process.on('SIGINT', function () {
     process.exit();
 });
 
-client.bundle(function(err, client) {
+client.bundle(function (err, client) {
     client.set(filename, data, 0, function (err, code) {
         if (err) {
             console.error('ERROR!', err);
